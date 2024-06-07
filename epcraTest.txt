@@ -1,0 +1,237 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jan 12 21:41:35 2024
+
+@author: kelna
+"""
+
+# load pandas and path library, as well as others
+import pandas as pandas
+pandas.options.mode.chained_assignment = None
+from pathlib import Path
+from datetime import datetime
+
+# define func to take yes or no response only from user
+def yesnoAccept(printstring):
+    validInput=False
+    try:
+        while validInput==False:
+            userinput=input(printstring)
+            userinput=userinput.lower()
+            if userinput=="yes" or userinput=="no":
+                validInput=True
+                return userinput
+            else:
+                print("\nInvalid reponse; please enter Yes or No.")
+    except:
+        print("Error")
+
+# define func to take integers only from user
+def intAccept(printstring):
+    validInput=False
+    try:
+        while validInput==False:
+            userinput=input(printstring)
+            if userinput.isdigit():
+                userinput=int(userinput)
+                validInput=True
+                return userinput
+            else:
+                print("\nEntry was not an integer.")
+    except:
+        print("Error")
+
+# initialize route path
+dataDir=Path("""C:/Users/kelna/Documents/pythonTest""")
+
+# load base epcra inventory file
+fileToOpen=dataDir/"epcraTest.csv"
+epcra_raw=pandas.read_csv(fileToOpen,sep=",")
+epcra_copy1=epcra_raw.copy()
+
+# query chemical name
+chemQuery=input("\nPlease enter the name of the chemical as it appears in the SDS:  ")
+
+# loop through dataframe to check chemical entry
+for looper1 in epcra_copy1.chemName.unique():
+
+    # set chemFound variable
+    chemFound=False
+
+    # check if user input chemQuery is in looper1 with logic
+    if chemQuery.lower() in looper1.lower():
+        
+        # query user if input matches name in database
+        print("\nIs",looper1,"the chemical you are looking for?")
+        userConfirm=yesnoAccept("Yes/No:  ")
+        
+        # if query matches database name, set variable for chem name, set
+        #  chemFound variable for next action and break out of for loop
+        if userConfirm=="yes":
+            chemFound=True
+            trueChemName=looper1
+            break
+
+# if chem is found, adjust the data for the chem entry
+if chemFound==True:
+    
+    # query user for quantity of chem received
+    print("\nWhat quantity of the chemical is added to the inventory?")
+    addedQuant=intAccept("Enter received quantity:  ")
+    
+    # query user for onsite quantity
+    print("\nWhat quantity is currently onsite before the received quantity?")
+    onsiteQuant=intAccept("Enter quantity onsite before received quantity:  ")
+
+    # query user for units
+    print("\nWhat are the units of the quantity?  Lbs, gal, drums, etc.")
+    unitsQuant=input("Enter units of the quantity:  ")
+
+    # adjust copy of database
+    epcra_copy1.onsiteQuant[epcra_copy1.chemName==trueChemName]=(int(onsiteQuant)+int(addedQuant))
+    epcra_copy1.onsiteQuantUnits[epcra_copy1.chemName==trueChemName]=unitsQuant
+    
+    # add date/time
+    now=datetime.now()
+    epcra_copy1.onsiteQuant_date[epcra_copy1.chemName==trueChemName]=now.strftime("%Y-%m-%d %H:%M:%S")
+
+    # use logic to reset maxOnsiteQuant column and date/time
+    if epcra_copy1.onsiteQuant[epcra_copy1.chemName==trueChemName][1]>epcra_copy1.maxOnsiteQuant[epcra_copy1.chemName==trueChemName][1]:
+        epcra_copy1.maxOnsiteQuant[epcra_copy1.chemName==trueChemName]=epcra_copy1.onsiteQuant[epcra_copy1.chemName==trueChemName]
+        epcra_copy1.maxOnsiteQuant_date[epcra_copy1.chemName==trueChemName]=now.strftime("%Y-%m-%d %H:%M:%S")
+        
+    print(epcra_copy1[epcra_copy1.chemName==trueChemName].iloc[1,1:7])
+
+
+# if chem is not found, add entry
+if chemFound==False:
+    
+    # query user for name of chemical and double check spelling
+    print("\nThat chemical was not found.  You must add an entry to the database.")
+    print("What is the name of the chemical/material as it is spelled in the SDS sheet?")
+    userinputChemname=input("Enter name if chemical/material from SDS:  ")
+
+    # confirm spelling with user
+    userinputChemnameConfirmed=False
+    while userinputChemnameConfirmed==False:
+        print("You entered",userinputChemname,"; is this the spelling the SDS sheet uses?")
+        userConfirm2=yesnoAccept("Yes/No:  ")
+        if userConfirm2=="yes":
+            userinputChemnameConfirmed=True
+        else:
+            print("What is the name of the chemical/material as it is spelled in the SDS sheet?")
+            userinputChemname=input("Enter name if chemical/material from SDS:  ")
+    
+    # query user for CAS numbers and percentages
+    userinputCasConfirmed=False
+    while userinputCasConfirmed==False:
+            
+        # query user for name of chemical and double check spelling
+        print("\nReview the chemical composition of the SDS and enter all CAS numbers listed exactly as they are in the SDS.")
+        userinputCas=input("Enter the first CAS number in the SDS:  ")
+        print("You entered",userinputCas,"; is that as it is written in the SDS?")
+        userConfirm3=yesnoAccept("Yes/No:  ")
+        if userConfirm3=="yes":
+            
+            # compile user input into array to be plugged into dataframe later
+            casArray=[userinputCas]
+            
+            # query user about max CAS percentage
+            strVar="\nEnter the maximum of the percentage range for CAS "+userinputCas+":  "
+            userinputCasPercent=intAccept(strVar)
+            
+            # compile CAS percentage into array
+            casPercentArray=[userinputCasPercent]
+            
+            # continue querying about other CAS numbers
+            print("\nAre there other CAS numbers listed in the SDS?")
+            userConfirm4=yesnoAccept("Yes/No:  ")
+            if userConfirm4=="no":
+                userinputCasConfirmed=True
+            else:
+                finishAddingCas=False
+                while finishAddingCas==False:
+                    userinputCas=input("\nEnter the next CAS number in the SDS:  ")
+                    print("You entered",userinputCas,"; is that as it is written in the SDS?")
+                    userConfirm4=yesnoAccept("Yes/No:  ")
+                    if userConfirm4=="yes":
+                        
+                        # compile CAS into array
+                        casArray.append(userinputCas)
+                        
+                        # get the percentage
+                        strVar="\nEnter the maximum of the percentage range for CAS "+userinputCas+":  "
+                        userinputCasPercent=intAccept(strVar)
+                        
+                        # compile CAS percentage into array
+                        casPercentArray.append(userinputCasPercent)
+                        
+                        print("\nAre there other CAS numbers listed in the SDS?")
+                        userConfirm5=yesnoAccept("Yes/No:  ")
+                        if userConfirm5=="no":
+                            finishAddingCas=True
+                            userinputCasConfirmed=True
+
+    # query user for quantity of chemical received
+    print("\nWhat quantity of the chemical is added to the inventory?")
+    addedQuant=intAccept("Enter received quantity:  ")
+
+    # query user for onsite quantity
+    print("\nWhat quantity is currently onsite before the received quantity?")
+    onsiteQuant=intAccept("Enter quantity onsite before received quantity:  ")
+
+    # query user for units
+    print("\nWhat are the units of the quantity?  Lbs, gal, drums, etc.")
+    unitsQuant=input("Enter units of the quantity:  ")
+    
+    # calculate totalQuant
+    totalQuant=int(addedQuant)+int(onsiteQuant)
+    
+    # setup temp dataframe, display to user and stack into main database
+    #
+    # set up all arrays
+    df_chemName=[userinputChemname]*len(casArray)
+    df_onsiteQuantUnits=[unitsQuant]*len(casArray)
+    df_onsiteQuant=[totalQuant]*len(casArray)
+    
+    now=datetime.now()
+    df_onsiteQuant_date=[now]*len(casArray)
+    df_maxOnsiteQuant=[totalQuant]*len(casArray)
+    
+    now=datetime.now()
+    df_maxOnsiteQuant_date=[now]*len(casArray)
+    df_casQuant=["NA"]*len(casArray)
+    df_ehsFlag=["NA"]*len(casArray)
+    df_reportFlag=["NA"]*len(casArray)
+
+    # get last index value in epcra_copy1
+    #lastindex=epcra_copy1['index'][len(epcra_copy1.index)-1]
+    #lastindexnum=lastindex[5:8]
+
+    # set up dict for dataframe
+    df_dict={'chemName':df_chemName,
+             'onsiteQuantUnits':df_onsiteQuantUnits,
+             'onsiteQuant':df_onsiteQuant,
+             'onsiteQuant_date':df_onsiteQuant_date,
+             'maxOnsiteQuant':df_maxOnsiteQuant,
+             'maxOnsiteQuant_date':df_maxOnsiteQuant_date,
+             'chemConstCas':casArray,
+             'casPercent':casPercentArray,
+             'casQuant':df_casQuant,
+             'ehsFlag':df_ehsFlag,
+             'reportFlag':df_reportFlag}
+    
+    # gen dataframe from dict
+    epcra_copy1_aug=pandas.DataFrame(df_dict)
+    
+    # calculate the casQuant vector
+    epcra_copy1_aug.casQuant=epcra_copy1_aug.maxOnsiteQuant*(epcra_copy1_aug.casPercent*0.01)
+    
+    # print dataframe
+    print(epcra_copy1_aug)
+    
+    # append to main database
+    epcra_copy2=pandas.concat([epcra_copy1,epcra_copy1_aug])
+    
+    # EARLY BUT WRITING CSV TO FILE
+    epcra_copy2.to_csv(fileToOpen,sep=',')

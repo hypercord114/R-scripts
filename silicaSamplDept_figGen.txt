@@ -1,0 +1,234 @@
+script_name.var="silicaSamplDept_figGen"
+dataDate.var="2024-02-07"
+#
+#
+# F&J
+# Title:  Figure generation script for industrial hygiene exposure sampling 
+# Author:  K. Navagh
+# Date Created:  2022-06-13
+# Date Last Updated:  
+#
+# Summary:  XXX
+#
+
+#=================================================
+# Begin 'Reading data into R'
+
+# Initialize route variable
+route.strVar="//fjfile02/users$/knavagh/Documents/EMS documentation/Air Monitoring/Silica/comprGraphics/graphGen/"
+
+# Read in data files to initialize dataframes
+silica_raw.df=read.csv(paste(route.strVar,"comprGraphs-silicaSampl_2024-02-07.csv",sep=""),header=TRUE,sep=",",as.is=TRUE)
+
+# End 'Reading data into R'
+#=================================================
+
+
+
+#=================================================
+# Begin 'Data pre-processing'
+
+#--------------------
+# Subset silica_raw.df to remove all data but 'Respirable crystalline silica' data
+silica_sub1.df=silica_raw.df[silica_raw.df$toxicant=="Respirable crystalline silica",]
+#--------------------
+
+#--------------------
+# Group all Annealing operations
+#
+# Preserve original $operation vector
+silica_sub1.df$operationRaw=silica_sub1.df$operation
+
+# Grepl and rename all Annealing operations
+silica_sub1.df$operation[grepl("Annealing",silica_sub1.df$operation)]="Annealing"
+#--------------------
+
+#--------------------
+# Add qualifier column $rnum
+silica_sub1.df$nrow=1:nrow(silica_sub1.df)
+#--------------------
+
+
+# End 'Data pre-processing'
+#=================================================
+
+
+
+#=================================================
+# Begin 'Figure generation section'
+
+# Write figures to file
+#pdf(paste(route.strVar,"figures/",script_name.var,"_",dataDate.var,".pdf",sep=""),width=11,height=8.5)
+pdf(paste(route.strVar,"figures/",script_name.var,"_",dataDate.var,"_AnnealingCongl.pdf",sep=""),width=11,height=8.5)
+#pdf(paste(route.strVar,"figures/",script_name.var,"_",dataDate.var,"_Foundry_2023-07-24.pdf",sep=""),width=11,height=8.5)
+
+# Set layout
+par(mfrow=c(2,2))
+
+# Set figCount.var
+figCount.var=0
+
+# Initialize loop over operation
+#for(a.loopVar in c("Sprue table","DISA operator","Shakeout/Hole","E-Melt"))
+for(a.loopVar in unique(silica_sub1.df$operation))
+{
+	#-------------------------------------------------
+	# Preprocess data
+
+	# Set plot.df
+	plot.df=silica_sub1.df[silica_sub1.df$operation==a.loopVar,]
+	
+	# Set axes limits
+	#
+	# If logic to set appropriate yaxis limit
+	if(max(plot.df$bzConc)>=50)
+	{
+		# Set yaxis above 50
+		xaxisLim.var=max(plot.df$bzConc)+5
+
+	}	# End 'if(plot.df$bzConc>50)'
+	if(max(plot.df$bzConc)<50)
+	{
+		# Set yaxis limit as 50
+		xaxisLim.var=55
+
+	}	# End 'if(plot.df$bzConc>50)'
+	
+	# Add $rowNum
+	plot.df$rowNum=1:nrow(plot.df)
+
+	# Mod figCount.var
+	figCount.var=figCount.var+1
+
+	# Reset figCount.var?
+	if(figCount.var==5)
+	{
+		figCount.var=1
+
+	}	# End 'if(figCount.var==5)'
+
+	#-------------------------------------------------
+
+
+	#-------------------------------------------------
+	# Graphical plotting section
+	
+	# Mod code for E-Melt data
+	if(a.loopVar!="E-Melt Furnace Reline")
+	{
+		# Generate barplot of raw 'PM10_Avg' measurements
+		plot(x=plot.df$rowNum,y=plot.df$bzConc,type="l",ylim=c(0,xaxisLim.var),yaxt="n",xaxt="n",ylab=NA,xlab=NA)
+	
+		# Add effExp line
+		points(x=plot.df$rowNum,y=plot.df$effExp,type="l",col="green")
+	
+	} # End 'if(a.loopVar!="E-Melt Furnace Reline")'
+
+	# Mod code for E-Melt data
+	if(a.loopVar=="E-Melt Furnace Reline")
+	{		
+		# Generate barplot of raw 'PM10_Avg' measurements
+		plot(x=plot.df$rowNum,y=plot.df$bzConc,type="n",ylim=c(0,xaxisLim.var),yaxt="n",xaxt="n",ylab=NA,xlab=NA)
+	
+		# Loop over employees
+		for(empl.loopvar in unique(plot.df$employee))
+		{
+			# Subset plot.df for each employee
+			plot_sub.df=plot.df[plot.df$employee==empl.loopvar,]
+
+			# Add bzConc line
+			points(x=plot_sub.df$rowNum,y=plot_sub.df$bzConc,type="l",col="black")
+
+			# Add effExp line
+			points(x=plot_sub.df$rowNum,y=plot_sub.df$effExp,type="l",col="green")
+
+		} # End 'for(empl.loopvar in unique(plot.df$employee))'
+
+	} # End 'if(a.loopVar=="E-Melt Furnace Reline")'
+	
+	# Add box to plot
+	box(lwd=2)
+
+	# Add ablines for top three max measurements
+	abline(h=50,col="red",lty=2)
+	abline(h=25,col="orange",lty=2)
+	
+	# End 'Graphical plotting section'
+	#-------------------------------------------------
+	
+	#-------------------------------------------------
+	# Graphical axes section
+
+	# Add axes ticks and labels
+	axis(side=2,at=seq(0,xaxisLim.var,5.0),las=1)
+	axis(side=1,at=plot.df$rowNum,labels=plot.df$date,las=2)
+
+	# End 'Graphical axes section'
+	#-------------------------------------------------
+	
+	#-------------------------------------------------
+	# Legend annotations
+	
+	# Add legend to figure
+	legend("topright",legend=c("OSHA PEL 50ug/m3","OSHA AL 25ug/m3",
+		paste("Max $bzConc: ",max(plot.df$bzConc)),
+		paste("Min $bzConc: ",min(plot.df$bzConc)),
+		paste("Max $effExp: ",max(plot.df$effExp)),
+		paste("Min $effExp: ",min(plot.df$effExp))),lty=c(2,2,1,1,1,1),col=c("red","orange","black","black","green","green"),inset=0.03)
+
+	# Mod code for E-Melt data
+	if(a.loopVar!="E-Melt Furnace Reline")
+	{
+		# Add legend to figure
+		legend("topleft",legend=c(paste("Most recent date: ",plot.df$date[plot.df$nrow==max(plot.df$nrow)]),
+			paste("$bzConc: ",plot.df$bzConc[plot.df$nrow==max(plot.df$nrow)]),
+			paste("$effExp: ",plot.df$effExp[plot.df$nrow==max(plot.df$nrow)])),inset=0.03)
+
+	} # End 'if(a.loopVar!="E-Melt Furnace Reline")'
+
+	# Mod code for E-Melt data
+	if(a.loopVar=="E-Melt Furnace Reline")
+	{
+		# Add legend to figure
+		legend("topleft",legend=c(paste("Most recent date: ",plot.df$date[plot.df$nrow==max(plot.df$nrow)]),
+			paste("$bzConc: ",plot.df$bzConc[plot.df$date==plot.df$date[plot.df$nrow==max(plot.df$nrow)]][1]," & ",plot.df$bzConc[plot.df$date==plot.df$date[plot.df$nrow==max(plot.df$nrow)]][2]),
+			paste("$effExp: ",plot.df$effExp[plot.df$date==plot.df$date[plot.df$nrow==max(plot.df$nrow)]][1]," & ",plot.df$effExp[plot.df$date==plot.df$date[plot.df$nrow==max(plot.df$nrow)]][2])),inset=0.03)
+	
+	} # End 'if(a.loopVar=="E-Melt Furnace Reline")'
+
+	# End 'Legend annotations'
+	#-------------------------------------------------
+	
+	#-------------------------------------------------
+	# Titles, axis labels and other annotations
+	
+	# Add title to barplot by number
+	mtext(paste(a.loopVar," RCS Sample Data by HSE",sep=""),font=2,cex=0.9,side=3,line=2,adj=1)
+	
+	# Add y-axis label
+	yaxis.loc=par("usr")
+	text(yaxis.loc[1],yaxis.loc[4],"RCS ug/m3\n8hr TWA",pos=3,xpd=TRUE,offset=1,font=2)
+
+	# For not vs-Met
+	if(figCount.var==4)
+	{
+		# Add generation time to figure
+		par(xpd=NA)
+		mtext(paste("Figure generated: ",Sys.time(),sep=""),side=4,adj=0,cex=0.7,line=1.1)
+		par(xpd=FALSE)
+
+	}	# End 'if(a.loopVar!="vs-Met")'
+	
+	# End 'Titles, axis labels and other annotations'
+	#-------------------------------------------------
+
+}	# End 'for(a.loopVar in unique(silica_sub1.df$operation))'
+
+
+# End 'Write figures to file'
+dev.off()
+
+# End 'Figure generation section'
+#=================================================
+
+

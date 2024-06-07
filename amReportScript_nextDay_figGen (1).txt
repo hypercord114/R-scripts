@@ -1,0 +1,1177 @@
+script_name.var="amReportScript_nextDay_figGen"
+dataDate.var="2017-03-20"
+endWorkDay.var="16:00:00"
+#
+#
+# AECOM
+# Title:  Figure Generation Script for TVOCs, PM10 and meteorological measurements
+# Author:  K. Navagh, Air Tech for AECOM
+# Date Created:  2016-04-12
+# Date Last Updated:  2016-05-13 (K. Navagh, AECOM)
+#
+# Summary:  This script will generate a series of histograms for TVOCs and PM10 measurements
+#           taken at the O&R: Suffern MGP Remediation Project and annotate the figures with
+#           the three highest measurements taken for the day.
+#
+#           Script will also generate scatteplots of the meteorological measurements, add
+#           trendlines to the data and annotate the figures with the mean of the measurements
+#           taken for the day.
+#
+#           Script updated to fix FAM-5 dataframe when datalogger creates patulous data.  Code
+#           can be copied forward to fix other dataframes as well.
+#
+
+#=================================================
+# Begin 'Reading data into R'
+
+# Initialize route variable
+route.strVar="C:/Documents and Settings/Administrator/Desktop/AECOM_kNavagh/amReportScripts/"
+
+# Read in data files to initialize dataframes
+fam1_raw.df=read.table(paste(route.strVar,"data_files/FAM1_Avg_15Min.dat",sep=""),header=TRUE,sep=",",skip=1,as.is=TRUE)
+fam2_raw.df=read.table(paste(route.strVar,"data_files/FAM2_Avg_15Min.dat",sep=""),header=TRUE,sep=",",skip=1,as.is=TRUE)
+fam3_raw.df=read.table(paste(route.strVar,"data_files/FAM3_Avg_15Min.dat",sep=""),header=TRUE,sep=",",skip=1,as.is=TRUE)
+fam4_raw.df=read.table(paste(route.strVar,"data_files/FAM4_Avg_15Min.dat",sep=""),header=TRUE,sep=",",skip=1,as.is=TRUE)
+fam5_raw.df=read.table(paste(route.strVar,"data_files/FAM5_Avg_15Min.dat",sep=""),header=TRUE,sep=",",skip=1,as.is=TRUE)
+fam6_raw.df=read.table(paste(route.strVar,"data_files/FAM6_Avg_15Min.dat",sep=""),header=TRUE,sep=",",skip=1,as.is=TRUE)
+#met_raw.df=read.table(paste(route.strVar,"data_files/MET Station_Met_15mAvg.dat",sep=""),header=TRUE,sep=",",skip=1,as.is=TRUE)
+met_raw.df=read.table(paste(route.strVar,"data_files/EWS #7_Met_15mAvg.dat",sep=""),header=TRUE,sep=",",skip=1,as.is=TRUE)
+
+# End 'Reading data into R'
+#=================================================
+
+
+
+#=================================================
+# Begin 'Data pre-processing'
+
+#--------------------
+# Remove lines 1 and 2 from each data frame
+
+# Subset FAM1 dataframe to start on line 3
+fam1_sub0.df=fam1_raw.df[3:nrow(fam1_raw.df),]
+
+# Subset FAM2 dataframe to start on line 3
+fam2_sub0.df=fam2_raw.df[3:nrow(fam2_raw.df),]
+
+# Subset FAM3 dataframe to start on line 3
+fam3_sub0.df=fam3_raw.df[3:nrow(fam3_raw.df),]
+
+# Subset FAM4 dataframe to start on line 3
+fam4_sub0.df=fam4_raw.df[3:nrow(fam4_raw.df),]
+
+# Subset FAM5 dataframe to start on line 3
+fam5_sub0.df=fam5_raw.df[3:nrow(fam5_raw.df),]
+
+# Subset FAM6 dataframe to start on line 3
+fam6_sub0.df=fam6_raw.df[3:nrow(fam6_raw.df),]
+
+# Subset Meteorological dataframe to start on line 3
+met_sub0.df=met_raw.df[3:nrow(met_raw.df),]
+
+# End 'Remove lines 1 and 2 from each data frame'
+#--------------------
+
+
+#--------------------
+# Subset dataframes to only data for current date
+
+# Subset FAM1 dataframe to only data for current date
+fam1_sub1.df=fam1_sub0.df[grepl(dataDate.var,fam1_sub0.df$TIMESTAMP),]
+
+# Subset FAM2 dataframe to only data for current date
+fam2_sub1.df=fam2_sub0.df[grepl(dataDate.var,fam2_sub0.df$TIMESTAMP),]
+
+# Subset FAM3 dataframe to only data for current date
+fam3_sub1.df=fam3_sub0.df[grepl(dataDate.var,fam3_sub0.df$TIMESTAMP),]
+
+# Subset FAM4 dataframe to only data for current date
+fam4_sub1.df=fam4_sub0.df[grepl(dataDate.var,fam4_sub0.df$TIMESTAMP),]
+
+# Subset FAM5 dataframe to only data for current date
+fam5_sub1.df=fam5_sub0.df[grepl(dataDate.var,fam5_sub0.df$TIMESTAMP),]
+
+# Subset FAM6 dataframe to only data for current date
+fam6_sub1.df=fam6_sub0.df[grepl(dataDate.var,fam6_sub0.df$TIMESTAMP),]
+
+# Subset Meteorological dataframe to only data for current date
+met_sub1.df=met_sub0.df[grepl(dataDate.var,met_sub0.df$TIMESTAMP),]
+
+# End 'Subset dataframes to only data for current date'
+#--------------------
+
+#--------------------
+# Set vectors for measurements taken during calibrations
+
+fam1_sub1.df$tvoc_nan=NA
+fam2_sub1.df$tvoc_nan=NA
+fam3_sub1.df$tvoc_nan=NA
+fam4_sub1.df$tvoc_nan=NA
+fam5_sub1.df$tvoc_nan=NA
+fam6_sub1.df$tvoc_nan=NA
+
+fam1_sub1.df$pm10_nan=NA
+fam2_sub1.df$pm10_nan=NA
+fam3_sub1.df$pm10_nan=NA
+fam4_sub1.df$pm10_nan=NA
+fam5_sub1.df$pm10_nan=NA
+fam6_sub1.df$pm10_nan=NA
+
+# Set 'tvoc_nan' vector
+fam1_sub1.df$tvoc_nan[fam1_sub1.df$TVOC_PM10_Status_Avg=="NAN"]=fam1_sub1.df$TVOC_Avg[fam1_sub1.df$TVOC_PM10_Status_Avg=="NAN"]
+fam2_sub1.df$tvoc_nan[fam2_sub1.df$TVOC_PM10_Status_Avg=="NAN"]=fam2_sub1.df$TVOC_Avg[fam2_sub1.df$TVOC_PM10_Status_Avg=="NAN"]
+fam3_sub1.df$tvoc_nan[fam3_sub1.df$TVOC_PM10_Status_Avg=="NAN"]=fam3_sub1.df$TVOC_Avg[fam3_sub1.df$TVOC_PM10_Status_Avg=="NAN"]
+fam4_sub1.df$tvoc_nan[fam4_sub1.df$TVOC_PM10_Status_Avg=="NAN"]=fam4_sub1.df$TVOC_Avg[fam4_sub1.df$TVOC_PM10_Status_Avg=="NAN"]
+fam5_sub1.df$tvoc_nan[fam5_sub1.df$TVOC_PM10_Status_Avg=="NAN"]=fam5_sub1.df$TVOC_Avg[fam5_sub1.df$TVOC_PM10_Status_Avg=="NAN"]
+fam6_sub1.df$tvoc_nan[fam6_sub1.df$TVOC_PM10_Status_Avg=="NAN"]=fam6_sub1.df$TVOC_Avg[fam6_sub1.df$TVOC_PM10_Status_Avg=="NAN"]
+
+# Set 'pm10_nan' vector
+fam1_sub1.df$pm10_nan[fam1_sub1.df$TVOC_PM10_Status_Avg=="NAN"]=fam1_sub1.df$PM10_Avg[fam1_sub1.df$TVOC_PM10_Status_Avg=="NAN"]
+fam2_sub1.df$pm10_nan[fam2_sub1.df$TVOC_PM10_Status_Avg=="NAN"]=fam2_sub1.df$PM10_Avg[fam2_sub1.df$TVOC_PM10_Status_Avg=="NAN"]
+fam3_sub1.df$pm10_nan[fam3_sub1.df$TVOC_PM10_Status_Avg=="NAN"]=fam3_sub1.df$PM10_Avg[fam3_sub1.df$TVOC_PM10_Status_Avg=="NAN"]
+fam4_sub1.df$pm10_nan[fam4_sub1.df$TVOC_PM10_Status_Avg=="NAN"]=fam4_sub1.df$PM10_Avg[fam4_sub1.df$TVOC_PM10_Status_Avg=="NAN"]
+fam5_sub1.df$pm10_nan[fam5_sub1.df$TVOC_PM10_Status_Avg=="NAN"]=fam5_sub1.df$PM10_Avg[fam5_sub1.df$TVOC_PM10_Status_Avg=="NAN"]
+fam6_sub1.df$pm10_nan[fam6_sub1.df$TVOC_PM10_Status_Avg=="NAN"]=fam6_sub1.df$PM10_Avg[fam6_sub1.df$TVOC_PM10_Status_Avg=="NAN"]
+
+# End 'Set vectors for measurements taken during calibrations'
+#--------------------
+
+#--------------------
+# Set TIME vector
+
+# Parse out time from 'TIMESTAMP' vector and set in new 'TIME' vector
+fam1_sub1.df$TIME=substr(fam1_sub1.df$TIMESTAMP,12,19)
+fam2_sub1.df$TIME=substr(fam2_sub1.df$TIMESTAMP,12,19)
+fam3_sub1.df$TIME=substr(fam3_sub1.df$TIMESTAMP,12,19)
+fam4_sub1.df$TIME=substr(fam4_sub1.df$TIMESTAMP,12,19)
+fam5_sub1.df$TIME=substr(fam5_sub1.df$TIMESTAMP,12,19)
+fam6_sub1.df$TIME=substr(fam6_sub1.df$TIMESTAMP,12,19)
+met_sub1.df$TIME=substr(met_sub1.df$TIMESTAMP,12,19)
+
+# End 'Set TIME vector'
+#--------------------
+
+#--------------------
+# Fix dataframes
+
+frameFixer.df=data.frame(fam=c("FAM-1","FAM-2","FAM-3","FAM-4","FAM-5","FAM-6","Met"),nrow=NA,fix=0)
+
+frameFixer.df$nrow[frameFixer.df$fam=="FAM-1"]=nrow(fam1_sub1.df)
+frameFixer.df$nrow[frameFixer.df$fam=="FAM-2"]=nrow(fam2_sub1.df)
+frameFixer.df$nrow[frameFixer.df$fam=="FAM-3"]=nrow(fam3_sub1.df)
+frameFixer.df$nrow[frameFixer.df$fam=="FAM-4"]=nrow(fam4_sub1.df)
+frameFixer.df$nrow[frameFixer.df$fam=="FAM-5"]=nrow(fam5_sub1.df)
+frameFixer.df$nrow[frameFixer.df$fam=="FAM-6"]=nrow(fam6_sub1.df)
+frameFixer.df$nrow[frameFixer.df$fam=="Met"]=nrow(met_sub1.df)
+
+frameFixer.df$fix[frameFixer.df$nrow!=max(frameFixer.df$nrow)]="fix"
+
+if(frameFixer.df$fam[frameFixer.df$nrow==max(frameFixer.df$nrow)][1]=="FAM-1")
+{
+		TIME.vec=fam1_sub1.df$TIME
+
+}
+
+if(frameFixer.df$fam[frameFixer.df$nrow==max(frameFixer.df$nrow)][1]=="FAM-2")
+{
+		TIME.vec=fam2_sub1.df$TIME
+
+}
+
+if(frameFixer.df$fam[frameFixer.df$nrow==max(frameFixer.df$nrow)][1]=="FAM-3")
+{
+		TIME.vec=fam3_sub1.df$TIME
+
+}
+
+if(frameFixer.df$fam[frameFixer.df$nrow==max(frameFixer.df$nrow)][1]=="FAM-4")
+{
+		TIME.vec=fam4_sub1.df$TIME
+
+}
+
+if(frameFixer.df$fam[frameFixer.df$nrow==max(frameFixer.df$nrow)][1]=="FAM-5")
+{
+		TIME.vec=fam5_sub1.df$TIME
+
+}
+
+if(frameFixer.df$fam[frameFixer.df$nrow==max(frameFixer.df$nrow)][1]=="FAM-6")
+{
+		TIME.vec=fam6_sub1.df$TIME
+
+}
+
+if(frameFixer.df$fam[frameFixer.df$nrow==max(frameFixer.df$nrow)][1]=="Met")
+{
+		TIME.vec=met_sub1.df$TIME
+
+}
+
+# Check dataframe with max time
+#
+# XXX
+for(fix.loopVar in as.vector(frameFixer.df$fam[frameFixer.df$fix=="fix"]))
+{
+	if(fix.loopVar=="FAM-5")
+	{
+		fam5_sub1_OLD.df=fam5_sub1.df
+		
+		fam5_sub1.df=data.frame(TIME=TIME.vec,
+								TIMESTAMP=NA,
+								RECORD=NA,
+								TVOC_Avg=NA,
+								PM10_Avg=NA,
+								TVOC_PM10_Status_Avg=NA,
+								tvoc_nan=NA,
+								pm10_nan=NA)
+
+		for(fam5fixTime.loopVar in fam5_sub1_OLD.df$TIME)
+		{
+			fam5_sub1.df$TIMESTAMP[fam5_sub1.df$TIME==fam5fixTime.loopVar]=fam5_sub1_OLD.df$TIMESTAMP[fam5_sub1_OLD.df$TIME==fam5fixTime.loopVar]
+			fam5_sub1.df$RECORD[fam5_sub1.df$TIME==fam5fixTime.loopVar]=fam5_sub1_OLD.df$RECORD[fam5_sub1_OLD.df$TIME==fam5fixTime.loopVar]
+			fam5_sub1.df$TVOC_Avg[fam5_sub1.df$TIME==fam5fixTime.loopVar]=fam5_sub1_OLD.df$TVOC_Avg[fam5_sub1_OLD.df$TIME==fam5fixTime.loopVar]
+			fam5_sub1.df$PM10_Avg[fam5_sub1.df$TIME==fam5fixTime.loopVar]=fam5_sub1_OLD.df$PM10_Avg[fam5_sub1_OLD.df$TIME==fam5fixTime.loopVar]
+			fam5_sub1.df$TVOC_PM10_Status_Avg[fam5_sub1.df$TIME==fam5fixTime.loopVar]=fam5_sub1_OLD.df$TVOC_PM10_Status_Avg[fam5_sub1_OLD.df$TIME==fam5fixTime.loopVar]
+			fam5_sub1.df$tvoc_nan[fam5_sub1.df$TIME==fam5fixTime.loopVar]=fam5_sub1_OLD.df$tvoc_nan[fam5_sub1_OLD.df$TIME==fam5fixTime.loopVar]
+			fam5_sub1.df$pm10_nan[fam5_sub1.df$TIME==fam5fixTime.loopVar]=fam5_sub1_OLD.df$pm10_nan[fam5_sub1_OLD.df$TIME==fam5fixTime.loopVar]
+
+		}
+
+	}	# End 'if(fix.loopVar=="FAM-5")'
+
+	if(fix.loopVar=="FAM-1")
+	{
+		fam1_sub1_OLD.df=fam1_sub1.df
+		
+		fam1_sub1.df=data.frame(TIME=TIME.vec,
+								TIMESTAMP=NA,
+								RECORD=NA,
+								TVOC_Avg=NA,
+								PM10_Avg=NA,
+								TVOC_PM10_Status_Avg=NA,
+								tvoc_nan=NA,
+								pm10_nan=NA)
+
+		for(fam1fixTime.loopVar in fam1_sub1_OLD.df$TIME)
+		{
+			fam1_sub1.df$TIMESTAMP[fam1_sub1.df$TIME==fam1fixTime.loopVar]=fam1_sub1_OLD.df$TIMESTAMP[fam1_sub1_OLD.df$TIME==fam1fixTime.loopVar]
+			fam1_sub1.df$RECORD[fam1_sub1.df$TIME==fam1fixTime.loopVar]=fam1_sub1_OLD.df$RECORD[fam1_sub1_OLD.df$TIME==fam1fixTime.loopVar]
+			fam1_sub1.df$TVOC_Avg[fam1_sub1.df$TIME==fam1fixTime.loopVar]=fam1_sub1_OLD.df$TVOC_Avg[fam1_sub1_OLD.df$TIME==fam1fixTime.loopVar]
+			fam1_sub1.df$PM10_Avg[fam1_sub1.df$TIME==fam1fixTime.loopVar]=fam1_sub1_OLD.df$PM10_Avg[fam1_sub1_OLD.df$TIME==fam1fixTime.loopVar]
+			fam1_sub1.df$TVOC_PM10_Status_Avg[fam1_sub1.df$TIME==fam1fixTime.loopVar]=fam1_sub1_OLD.df$TVOC_PM10_Status_Avg[fam1_sub1_OLD.df$TIME==fam1fixTime.loopVar]
+			fam1_sub1.df$tvoc_nan[fam1_sub1.df$TIME==fam1fixTime.loopVar]=fam1_sub1_OLD.df$tvoc_nan[fam1_sub1_OLD.df$TIME==fam1fixTime.loopVar]
+			fam1_sub1.df$pm10_nan[fam1_sub1.df$TIME==fam1fixTime.loopVar]=fam1_sub1_OLD.df$pm10_nan[fam1_sub1_OLD.df$TIME==fam1fixTime.loopVar]
+
+		}
+
+	}	# End 'if(fix.loopVar=="FAM-1")'
+
+
+	if(fix.loopVar=="FAM-2")
+	{
+		fam2_sub1_OLD.df=fam2_sub1.df
+		
+		fam2_sub1.df=data.frame(TIME=TIME.vec,
+								TIMESTAMP=NA,
+								RECORD=NA,
+								TVOC_Avg=NA,
+								PM10_Avg=NA,
+								TVOC_PM10_Status_Avg=NA,
+								tvoc_nan=NA,
+								pm10_nan=NA)
+
+		for(fam2fixTime.loopVar in fam2_sub1_OLD.df$TIME)
+		{
+			fam2_sub1.df$TIMESTAMP[fam2_sub1.df$TIME==fam2fixTime.loopVar]=fam2_sub1_OLD.df$TIMESTAMP[fam2_sub1_OLD.df$TIME==fam2fixTime.loopVar]
+			fam2_sub1.df$RECORD[fam2_sub1.df$TIME==fam2fixTime.loopVar]=fam2_sub1_OLD.df$RECORD[fam2_sub1_OLD.df$TIME==fam2fixTime.loopVar]
+			fam2_sub1.df$TVOC_Avg[fam2_sub1.df$TIME==fam2fixTime.loopVar]=fam2_sub1_OLD.df$TVOC_Avg[fam2_sub1_OLD.df$TIME==fam2fixTime.loopVar]
+			fam2_sub1.df$PM10_Avg[fam2_sub1.df$TIME==fam2fixTime.loopVar]=fam2_sub1_OLD.df$PM10_Avg[fam2_sub1_OLD.df$TIME==fam2fixTime.loopVar]
+			fam2_sub1.df$TVOC_PM10_Status_Avg[fam2_sub1.df$TIME==fam2fixTime.loopVar]=fam2_sub1_OLD.df$TVOC_PM10_Status_Avg[fam2_sub1_OLD.df$TIME==fam2fixTime.loopVar]
+			fam2_sub1.df$tvoc_nan[fam2_sub1.df$TIME==fam2fixTime.loopVar]=fam2_sub1_OLD.df$tvoc_nan[fam2_sub1_OLD.df$TIME==fam2fixTime.loopVar]
+			fam2_sub1.df$pm10_nan[fam2_sub1.df$TIME==fam2fixTime.loopVar]=fam2_sub1_OLD.df$pm10_nan[fam2_sub1_OLD.df$TIME==fam2fixTime.loopVar]
+
+		}
+
+	}	# End 'if(fix.loopVar=="FAM-2")'
+
+
+	if(fix.loopVar=="FAM-6")
+	{
+		fam6_sub1_OLD.df=fam6_sub1.df
+		
+		fam6_sub1.df=data.frame(TIME=TIME.vec,
+								TIMESTAMP=NA,
+								RECORD=NA,
+								TVOC_Avg=NA,
+								PM10_Avg=NA,
+								TVOC_PM10_Status_Avg=NA,
+								tvoc_nan=NA,
+								pm10_nan=NA)
+
+		for(fam6fixTime.loopVar in fam6_sub1_OLD.df$TIME)
+		{
+			fam6_sub1.df$TIMESTAMP[fam6_sub1.df$TIME==fam6fixTime.loopVar]=fam6_sub1_OLD.df$TIMESTAMP[fam6_sub1_OLD.df$TIME==fam6fixTime.loopVar]
+			fam6_sub1.df$RECORD[fam6_sub1.df$TIME==fam6fixTime.loopVar]=fam6_sub1_OLD.df$RECORD[fam6_sub1_OLD.df$TIME==fam6fixTime.loopVar]
+			fam6_sub1.df$TVOC_Avg[fam6_sub1.df$TIME==fam6fixTime.loopVar]=fam6_sub1_OLD.df$TVOC_Avg[fam6_sub1_OLD.df$TIME==fam6fixTime.loopVar]
+			fam6_sub1.df$PM10_Avg[fam6_sub1.df$TIME==fam6fixTime.loopVar]=fam6_sub1_OLD.df$PM10_Avg[fam6_sub1_OLD.df$TIME==fam6fixTime.loopVar]
+			fam6_sub1.df$TVOC_PM10_Status_Avg[fam6_sub1.df$TIME==fam6fixTime.loopVar]=fam6_sub1_OLD.df$TVOC_PM10_Status_Avg[fam6_sub1_OLD.df$TIME==fam6fixTime.loopVar]
+			fam6_sub1.df$tvoc_nan[fam6_sub1.df$TIME==fam6fixTime.loopVar]=fam6_sub1_OLD.df$tvoc_nan[fam6_sub1_OLD.df$TIME==fam6fixTime.loopVar]
+			fam6_sub1.df$pm10_nan[fam6_sub1.df$TIME==fam6fixTime.loopVar]=fam6_sub1_OLD.df$pm10_nan[fam6_sub1_OLD.df$TIME==fam6fixTime.loopVar]
+
+		}
+
+	}	# End 'if(fix.loopVar=="FAM-6")'
+
+
+	if(fix.loopVar=="FAM-3")
+	{
+		fam3_sub1_OLD.df=fam3_sub1.df
+		
+		fam3_sub1.df=data.frame(TIME=TIME.vec,
+								TIMESTAMP=NA,
+								RECORD=NA,
+								TVOC_Avg=NA,
+								PM10_Avg=NA,
+								TVOC_PM10_Status_Avg=NA,
+								tvoc_nan=NA,
+								pm10_nan=NA)
+
+		for(fam3fixTime.loopVar in fam3_sub1_OLD.df$TIME)
+		{
+			fam3_sub1.df$TIMESTAMP[fam3_sub1.df$TIME==fam3fixTime.loopVar]=fam3_sub1_OLD.df$TIMESTAMP[fam3_sub1_OLD.df$TIME==fam3fixTime.loopVar]
+			fam3_sub1.df$RECORD[fam3_sub1.df$TIME==fam3fixTime.loopVar]=fam3_sub1_OLD.df$RECORD[fam3_sub1_OLD.df$TIME==fam3fixTime.loopVar]
+			fam3_sub1.df$TVOC_Avg[fam3_sub1.df$TIME==fam3fixTime.loopVar]=fam3_sub1_OLD.df$TVOC_Avg[fam3_sub1_OLD.df$TIME==fam3fixTime.loopVar]
+			fam3_sub1.df$PM10_Avg[fam3_sub1.df$TIME==fam3fixTime.loopVar]=fam3_sub1_OLD.df$PM10_Avg[fam3_sub1_OLD.df$TIME==fam3fixTime.loopVar]
+			fam3_sub1.df$TVOC_PM10_Status_Avg[fam3_sub1.df$TIME==fam3fixTime.loopVar]=fam3_sub1_OLD.df$TVOC_PM10_Status_Avg[fam3_sub1_OLD.df$TIME==fam3fixTime.loopVar]
+			fam3_sub1.df$tvoc_nan[fam3_sub1.df$TIME==fam3fixTime.loopVar]=fam3_sub1_OLD.df$tvoc_nan[fam3_sub1_OLD.df$TIME==fam3fixTime.loopVar]
+			fam3_sub1.df$pm10_nan[fam3_sub1.df$TIME==fam3fixTime.loopVar]=fam3_sub1_OLD.df$pm10_nan[fam3_sub1_OLD.df$TIME==fam3fixTime.loopVar]
+
+		}
+
+	}	# End 'if(fix.loopVar=="FAM-3")'
+
+
+	if(fix.loopVar=="FAM-4")
+	{
+		fam4_sub1_OLD.df=fam4_sub1.df
+		
+		fam4_sub1.df=data.frame(TIME=TIME.vec,
+								TIMESTAMP=NA,
+								RECORD=NA,
+								TVOC_Avg=NA,
+								PM10_Avg=NA,
+								TVOC_PM10_Status_Avg=NA,
+								tvoc_nan=NA,
+								pm10_nan=NA)
+
+		for(fam4fixTime.loopVar in fam4_sub1_OLD.df$TIME)
+		{
+			fam4_sub1.df$TIMESTAMP[fam4_sub1.df$TIME==fam4fixTime.loopVar]=fam4_sub1_OLD.df$TIMESTAMP[fam4_sub1_OLD.df$TIME==fam4fixTime.loopVar]
+			fam4_sub1.df$RECORD[fam4_sub1.df$TIME==fam4fixTime.loopVar]=fam4_sub1_OLD.df$RECORD[fam4_sub1_OLD.df$TIME==fam4fixTime.loopVar]
+			fam4_sub1.df$TVOC_Avg[fam4_sub1.df$TIME==fam4fixTime.loopVar]=fam4_sub1_OLD.df$TVOC_Avg[fam4_sub1_OLD.df$TIME==fam4fixTime.loopVar]
+			fam4_sub1.df$PM10_Avg[fam4_sub1.df$TIME==fam4fixTime.loopVar]=fam4_sub1_OLD.df$PM10_Avg[fam4_sub1_OLD.df$TIME==fam4fixTime.loopVar]
+			fam4_sub1.df$TVOC_PM10_Status_Avg[fam4_sub1.df$TIME==fam4fixTime.loopVar]=fam4_sub1_OLD.df$TVOC_PM10_Status_Avg[fam4_sub1_OLD.df$TIME==fam4fixTime.loopVar]
+			fam4_sub1.df$tvoc_nan[fam4_sub1.df$TIME==fam4fixTime.loopVar]=fam4_sub1_OLD.df$tvoc_nan[fam4_sub1_OLD.df$TIME==fam4fixTime.loopVar]
+			fam4_sub1.df$pm10_nan[fam4_sub1.df$TIME==fam4fixTime.loopVar]=fam4_sub1_OLD.df$pm10_nan[fam4_sub1_OLD.df$TIME==fam4fixTime.loopVar]
+
+		}
+
+	}	# End 'if(fix.loopVar=="FAM-4")'
+
+
+	if(fix.loopVar=="Met")
+	{
+		met_sub1_OLD.df=met_sub1.df
+		
+		met_sub1.df=data.frame(TIME=TIME.vec,
+								TIMESTAMP=NA,
+								RECORD=NA,
+								T109_F_Avg=NA,
+								R_Hum_Avg=NA,
+								WS_mph_15m=NA,
+								WindDir_15m=NA,
+								WindDir_SD_15m=NA)
+
+		for(metfixTime.loopVar in met_sub1_OLD.df$TIME)
+		{
+			met_sub1.df$TIMESTAMP[met_sub1.df$TIME==metfixTime.loopVar]=met_sub1_OLD.df$TIMESTAMP[met_sub1_OLD.df$TIME==metfixTime.loopVar]
+			met_sub1.df$RECORD[met_sub1.df$TIME==metfixTime.loopVar]=met_sub1_OLD.df$RECORD[met_sub1_OLD.df$TIME==metfixTime.loopVar]
+			met_sub1.df$T109_F_Avg[met_sub1.df$TIME==metfixTime.loopVar]=met_sub1_OLD.df$T109_F_Avg[met_sub1_OLD.df$TIME==metfixTime.loopVar]
+			met_sub1.df$R_Hum_Avg[met_sub1.df$TIME==metfixTime.loopVar]=met_sub1_OLD.df$R_Hum_Avg[met_sub1_OLD.df$TIME==metfixTime.loopVar]
+			met_sub1.df$WS_mph_15m[met_sub1.df$TIME==metfixTime.loopVar]=met_sub1_OLD.df$WS_mph_15m[met_sub1_OLD.df$TIME==metfixTime.loopVar]
+			met_sub1.df$WindDir_15m[met_sub1.df$TIME==metfixTime.loopVar]=met_sub1_OLD.df$WindDir_15m[met_sub1_OLD.df$TIME==metfixTime.loopVar]
+			met_sub1.df$WindDir_SD_15m[met_sub1.df$TIME==metfixTime.loopVar]=met_sub1_OLD.df$WindDir_SD_15m[met_sub1_OLD.df$TIME==metfixTime.loopVar]
+
+		}
+
+	}	# End 'if(fix.loopVar=="Met")'
+
+}
+
+# End 'Fix dataframes'
+#--------------------
+
+#--------------------
+# Subset dataframes on basis of time
+
+# Add 'rownum' vector to aid in subset
+fam1_sub1.df$rownum=1:nrow(fam1_sub1.df)
+fam2_sub1.df$rownum=1:nrow(fam2_sub1.df)
+fam3_sub1.df$rownum=1:nrow(fam3_sub1.df)
+fam4_sub1.df$rownum=1:nrow(fam4_sub1.df)
+fam5_sub1.df$rownum=1:nrow(fam5_sub1.df)
+fam6_sub1.df$rownum=1:nrow(fam6_sub1.df)
+met_sub1.df$rownum=1:nrow(met_sub1.df)
+
+# Subset dataframes to only data beyond 06:45 using 'rownum' vector
+fam1_sub2.df=fam1_sub1.df[(fam1_sub1.df$rownum[fam1_sub1.df$TIME=="06:00:00"]):(fam1_sub1.df$rownum[fam1_sub1.df$TIME==endWorkDay.var]),]
+fam2_sub2.df=fam2_sub1.df[(fam2_sub1.df$rownum[fam2_sub1.df$TIME=="06:00:00"]):(fam2_sub1.df$rownum[fam2_sub1.df$TIME==endWorkDay.var]),]
+fam3_sub2.df=fam3_sub1.df[(fam3_sub1.df$rownum[fam3_sub1.df$TIME=="06:00:00"]):(fam3_sub1.df$rownum[fam3_sub1.df$TIME==endWorkDay.var]),]
+fam4_sub2.df=fam4_sub1.df[(fam4_sub1.df$rownum[fam4_sub1.df$TIME=="06:00:00"]):(fam4_sub1.df$rownum[fam4_sub1.df$TIME==endWorkDay.var]),]
+fam5_sub2.df=fam5_sub1.df[(fam5_sub1.df$rownum[fam5_sub1.df$TIME=="06:00:00"]):(fam5_sub1.df$rownum[fam5_sub1.df$TIME==endWorkDay.var]),]
+fam6_sub2.df=fam6_sub1.df[(fam6_sub1.df$rownum[fam6_sub1.df$TIME=="06:00:00"]):(fam6_sub1.df$rownum[fam6_sub1.df$TIME==endWorkDay.var]),]
+met_sub2.df=met_sub1.df[(met_sub1.df$rownum[met_sub1.df$TIME=="06:00:00"]):(met_sub1.df$rownum[met_sub1.df$TIME==endWorkDay.var]),]
+
+# End 'Subset dataframes on basis of time'
+#--------------------
+
+#--------------------
+# Set some variables
+
+# Set max value for TVOC
+maxTvoc.var=max(as.numeric(c(fam1_sub2.df$TVOC_Avg[fam1_sub2.df$TVOC_Avg!="NAN" & is.na(fam1_sub2.df$TVOC_Avg)==FALSE],
+					fam2_sub2.df$TVOC_Avg[fam2_sub2.df$TVOC_Avg!="NAN" & is.na(fam2_sub2.df$TVOC_Avg)==FALSE],
+					fam3_sub2.df$TVOC_Avg[fam3_sub2.df$TVOC_Avg!="NAN" & is.na(fam3_sub2.df$TVOC_Avg)==FALSE],
+					fam4_sub2.df$TVOC_Avg[fam4_sub2.df$TVOC_Avg!="NAN" & is.na(fam4_sub2.df$TVOC_Avg)==FALSE],
+					fam5_sub2.df$TVOC_Avg[fam5_sub2.df$TVOC_Avg!="NAN" & is.na(fam5_sub2.df$TVOC_Avg)==FALSE],
+					fam6_sub2.df$TVOC_Avg[fam6_sub2.df$TVOC_Avg!="NAN" & is.na(fam6_sub2.df$TVOC_Avg)==FALSE])))
+
+# Set minimum value for 'maxTvoc.var'
+if(maxTvoc.var < 0.3)
+{
+	# Set variable
+	maxTvoc.var=0.3
+
+}	# End 'if(maxTvoc.var < 0.3)'
+
+# Pad 'maxTvoc.var'
+if(maxTvoc.var > 0.3)
+{
+	# Set variable
+	maxTvoc.var=maxTvoc.var+0.05
+
+}	# End 'if(maxTvoc.var > 0.3)'
+
+# Set max value for PM10
+maxPm10.var=(max(as.numeric(c(fam1_sub2.df$PM10_Avg[fam1_sub2.df$PM10_Avg!="NAN" & is.na(fam1_sub2.df$PM10_Avg)==FALSE],
+					fam2_sub2.df$PM10_Avg[fam2_sub2.df$PM10_Avg!="NAN" & is.na(fam2_sub2.df$PM10_Avg)==FALSE],
+					fam3_sub2.df$PM10_Avg[fam3_sub2.df$PM10_Avg!="NAN" & is.na(fam3_sub2.df$PM10_Avg)==FALSE],
+					fam4_sub2.df$PM10_Avg[fam4_sub2.df$PM10_Avg!="NAN" & is.na(fam4_sub2.df$PM10_Avg)==FALSE],
+					fam5_sub2.df$PM10_Avg[fam5_sub2.df$PM10_Avg!="NAN" & is.na(fam5_sub2.df$PM10_Avg)==FALSE],
+					fam6_sub2.df$PM10_Avg[fam6_sub2.df$PM10_Avg!="NAN" & is.na(fam6_sub2.df$PM10_Avg)==FALSE])))+10)
+
+# Set max value for PM10, humidity & windspeed
+maxPm10HumWS.var=(max(as.numeric(c(fam1_sub2.df$PM10_Avg[fam1_sub2.df$PM10_Avg!="NAN" & is.na(fam1_sub2.df$PM10_Avg)==FALSE],
+					fam2_sub2.df$PM10_Avg[fam2_sub2.df$PM10_Avg!="NAN" & is.na(fam2_sub2.df$PM10_Avg)==FALSE],
+					fam3_sub2.df$PM10_Avg[fam3_sub2.df$PM10_Avg!="NAN" & is.na(fam3_sub2.df$PM10_Avg)==FALSE],
+					fam4_sub2.df$PM10_Avg[fam4_sub2.df$PM10_Avg!="NAN" & is.na(fam4_sub2.df$PM10_Avg)==FALSE],
+					fam5_sub2.df$PM10_Avg[fam5_sub2.df$PM10_Avg!="NAN" & is.na(fam5_sub2.df$PM10_Avg)==FALSE],
+					fam6_sub2.df$PM10_Avg[fam6_sub2.df$PM10_Avg!="NAN" & is.na(fam6_sub2.df$PM10_Avg)==FALSE],
+					met_sub2.df$R_Hum_Avg[met_sub2.df$R_Hum_Avg!="NAN" & is.na(met_sub2.df$R_Hum_Avg)==FALSE],
+					met_sub2.df$WS_mph_15m[met_sub2.df$WS_mph_15m!="NAN" & is.na(met_sub2.df$WS_mph_15m)==FALSE])))+10)
+#--------------------
+
+
+#--------------------
+# Make calculations necessary for engineer's wind direction average using degrees, described
+#  on the following webpage:  http://control.com/thread/1026210133
+
+# Correct 'met_sub2.df$WindDir_15m' vector
+met_sub2.df$WindDir_15m=as.numeric(met_sub2.df$WindDir_15m)
+
+# Add necessary vectors to fill with calculations
+met_sub2.df$windDir_ang=NA
+met_sub2.df$windDir_angR=NA
+met_sub2.df$windDir_cosAngR=NA
+met_sub2.df$windDir_sinAngR=NA
+met_sub2.df$windDir_cuA=NA
+met_sub2.df$windDir_cuB=NA
+met_sub2.df$windDir_cuA_final=NA
+met_sub2.df$windDir_cuB_final=NA
+met_sub2.df$windDir_avg=NA
+
+# Declare pi variable
+pi.var=22/7
+
+# Declare cumulative variables
+windDir_cuA.var=0.0000001
+windDir_cuB.var=0.0000001
+
+# Declare final variable
+windDir_avg.var=NA
+
+# Loop over all lines of dataframe
+for(windDirCalcNrow.loopVar in 1:nrow(met_sub2.df))
+{
+	# Set initial 
+	# If statements to check which quadrant the value of 'WindDir_15m' lies
+	#
+	# 'WindDir_15m' in quandrant 1?
+	if((met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] >= 0) & (met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] < 90))
+	{
+		# Set value in 'windDir_ang'
+		met_sub2.df$windDir_ang[windDirCalcNrow.loopVar]=90-met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar]
+
+		# Set value in 'windDir_angR'
+		met_sub2.df$windDir_angR[windDirCalcNrow.loopVar]=pi.var*met_sub2.df$windDir_ang[windDirCalcNrow.loopVar]/180
+
+		# Set value in 'windDir_cosAngR'
+		met_sub2.df$windDir_cosAngR[windDirCalcNrow.loopVar]=cos(met_sub2.df$windDir_angR[windDirCalcNrow.loopVar])
+
+		# Set value in 'windDir_sinAngR'
+		met_sub2.df$windDir_sinAngR[windDirCalcNrow.loopVar]=sin(met_sub2.df$windDir_angR[windDirCalcNrow.loopVar])
+
+		# Calculate cumulative values
+		windDir_cuA.var=windDir_cuA.var+met_sub2.df$windDir_cosAngR[windDirCalcNrow.loopVar]
+		windDir_cuB.var=windDir_cuB.var+met_sub2.df$windDir_sinAngR[windDirCalcNrow.loopVar]
+
+		# Plug in cumulative values
+		met_sub2.df$windDir_cuA[windDirCalcNrow.loopVar]=windDir_cuA.var
+		met_sub2.df$windDir_cuB[windDirCalcNrow.loopVar]=windDir_cuB.var
+
+	}	# End 'if((met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] >= 0) & (met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] < 0))'
+
+	# 'WindDir_15m' in quandrant 2?
+	if((met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] >= 90) & (met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] < 180))
+	{
+		# Set value in 'windDir_ang'
+		met_sub2.df$windDir_ang[windDirCalcNrow.loopVar]=met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar]-90
+
+		# Set value in 'windDir_angR'
+		met_sub2.df$windDir_angR[windDirCalcNrow.loopVar]=pi.var*met_sub2.df$windDir_ang[windDirCalcNrow.loopVar]/180
+
+		# Set value in 'windDir_cosAngR'
+		met_sub2.df$windDir_cosAngR[windDirCalcNrow.loopVar]=cos(met_sub2.df$windDir_angR[windDirCalcNrow.loopVar])
+
+		# Set value in 'windDir_sinAngR'
+		met_sub2.df$windDir_sinAngR[windDirCalcNrow.loopVar]=-sin(met_sub2.df$windDir_angR[windDirCalcNrow.loopVar])
+
+		# Calculate cumulative values
+		windDir_cuA.var=windDir_cuA.var+met_sub2.df$windDir_cosAngR[windDirCalcNrow.loopVar]
+		windDir_cuB.var=windDir_cuB.var+met_sub2.df$windDir_sinAngR[windDirCalcNrow.loopVar]
+
+		# Plug in cumulative values
+		met_sub2.df$windDir_cuA[windDirCalcNrow.loopVar]=windDir_cuA.var
+		met_sub2.df$windDir_cuB[windDirCalcNrow.loopVar]=windDir_cuB.var
+
+	}	# End 'if((met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] >= 90) & (met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] < 180))'
+
+	# 'WindDir_15m' in quandrant 3?
+	if((met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] >= 180) & (met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] < 270))
+	{
+		# Set value in 'windDir_ang'
+		met_sub2.df$windDir_ang[windDirCalcNrow.loopVar]=270-met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar]
+
+		# Set value in 'windDir_angR'
+		met_sub2.df$windDir_angR[windDirCalcNrow.loopVar]=pi.var*met_sub2.df$windDir_ang[windDirCalcNrow.loopVar]/180
+
+		# Set value in 'windDir_cosAngR'
+		met_sub2.df$windDir_cosAngR[windDirCalcNrow.loopVar]=-cos(met_sub2.df$windDir_angR[windDirCalcNrow.loopVar])
+
+		# Set value in 'windDir_sinAngR'
+		met_sub2.df$windDir_sinAngR[windDirCalcNrow.loopVar]=-sin(met_sub2.df$windDir_angR[windDirCalcNrow.loopVar])
+
+		# Calculate cumulative values
+		windDir_cuA.var=windDir_cuA.var+met_sub2.df$windDir_cosAngR[windDirCalcNrow.loopVar]
+		windDir_cuB.var=windDir_cuB.var+met_sub2.df$windDir_sinAngR[windDirCalcNrow.loopVar]
+
+		# Plug in cumulative values
+		met_sub2.df$windDir_cuA[windDirCalcNrow.loopVar]=windDir_cuA.var
+		met_sub2.df$windDir_cuB[windDirCalcNrow.loopVar]=windDir_cuB.var
+
+	}	# End 'if((met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] >= 180) & (met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] < 270))'
+
+	# 'WindDir_15m' in quandrant 4?
+	if((met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] >= 270) & (met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] < 360))
+	{
+		# Set value in 'windDir_ang'
+		met_sub2.df$windDir_ang[windDirCalcNrow.loopVar]=met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar]-270
+
+		# Set value in 'windDir_angR'
+		met_sub2.df$windDir_angR[windDirCalcNrow.loopVar]=pi.var*met_sub2.df$windDir_ang[windDirCalcNrow.loopVar]/180
+
+		# Set value in 'windDir_cosAngR'
+		met_sub2.df$windDir_cosAngR[windDirCalcNrow.loopVar]=-cos(met_sub2.df$windDir_angR[windDirCalcNrow.loopVar])
+
+		# Set value in 'windDir_sinAngR'
+		met_sub2.df$windDir_sinAngR[windDirCalcNrow.loopVar]=sin(met_sub2.df$windDir_angR[windDirCalcNrow.loopVar])
+
+		# Calculate cumulative values
+		windDir_cuA.var=windDir_cuA.var+met_sub2.df$windDir_cosAngR[windDirCalcNrow.loopVar]
+		windDir_cuB.var=windDir_cuB.var+met_sub2.df$windDir_sinAngR[windDirCalcNrow.loopVar]
+
+		# Plug in cumulative values
+		met_sub2.df$windDir_cuA[windDirCalcNrow.loopVar]=windDir_cuA.var
+		met_sub2.df$windDir_cuB[windDirCalcNrow.loopVar]=windDir_cuB.var
+
+	}	# End 'if((met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] >= 270) & (met_sub2.df$WindDir_15m[windDirCalcNrow.loopVar] < 360))'
+
+}	# End 'for(windDirCalc.loopVar in 1:nrow(met_sub2.df))'
+
+# Calculate 'windDir_ang.var' value
+windDir_ang.var=(180 * (atan(abs(windDir_cuB.var / nrow(met_sub2.df)) / abs(windDir_cuA.var / nrow(met_sub2.df)))) / pi.var + 0.5)
+
+# Use boolean logical statements to assess cumulative values and calculate final wind direction average
+#
+# Is value in quadrant 1, according to cumulative values?
+if((windDir_cuA.var > 0) & (windDir_cuB.var > 0))
+{
+	# Calculate final value
+	windDir_avg.var=90-windDir_ang.var
+
+}	# End 'if((windDir_cuA.var > 0) & (windDir_cuB.var > 0))'
+
+# Is value in quadrant 2, according to cumulative values?
+if((windDir_cuA.var > 0) & (windDir_cuB.var < 0))
+{
+	# Calculate final value
+	windDir_avg.var=90+windDir_ang.var
+
+}	# End 'if((windDir_cuA.var > 0) & (windDir_cuB.var < 0))'
+
+# Is value in quadrant 3, according to cumulative values?
+if((windDir_cuA.var < 0) & (windDir_cuB.var < 0))
+{
+	# Calculate final value
+	windDir_avg.var=270-windDir_ang.var
+
+}	# End 'if((windDir_cuA.var < 0) & (windDir_cuB.var < 0))'
+
+# Is value in quadrant 4, according to cumulative values?
+if((windDir_cuA.var < 0) & (windDir_cuB.var > 0))
+{
+	# Calculate final value
+	windDir_avg.var=270+windDir_ang.var
+
+}	# End 'if((windDir_cuA.var < 0) & (windDir_cuB.var > 0))'
+
+#Plug cumulative and final values into dataframe
+met_sub2.df$windDir_cuA_final=windDir_cuA.var
+met_sub2.df$windDir_cuB_final=windDir_cuB.var
+met_sub2.df$windDir_avg=windDir_avg.var
+#--------------------
+
+
+#--------------------
+# Write data tables to drive for use in Excel
+
+# Add vectors with FAM names
+fam1_sub2.df$FAM="FAM-1"
+fam2_sub2.df$FAM="FAM-2"
+fam3_sub2.df$FAM="FAM-3"
+fam4_sub2.df$FAM="FAM-4"
+fam5_sub2.df$FAM="FAM-5"
+fam6_sub2.df$FAM="FAM-6"
+
+# Write files
+write.table(fam1_sub2.df,file=paste(route.strVar,"outputs/FAM1_out_",dataDate.var,".dat",sep=""),sep=",")
+write.table(fam2_sub2.df,file=paste(route.strVar,"outputs/FAM2_out_",dataDate.var,".dat",sep=""),sep=",")
+write.table(fam3_sub2.df,file=paste(route.strVar,"outputs/FAM3_out_",dataDate.var,".dat",sep=""),sep=",")
+write.table(fam4_sub2.df,file=paste(route.strVar,"outputs/FAM4_out_",dataDate.var,".dat",sep=""),sep=",")
+write.table(fam5_sub2.df,file=paste(route.strVar,"outputs/FAM5_out_",dataDate.var,".dat",sep=""),sep=",")
+write.table(fam6_sub2.df,file=paste(route.strVar,"outputs/FAM6_out_",dataDate.var,".dat",sep=""),sep=",")
+write.table(met_sub2.df,file=paste(route.strVar,"outputs/MET_out_",dataDate.var,".dat",sep=""),sep=",")
+#--------------------
+
+
+# End 'Data pre-processing'
+#=================================================
+
+
+
+#=================================================
+# Begin 'Figure generation section'
+
+# Write figures to file
+pdf(paste(route.strVar,"figures/",script_name.var,"_",dataDate.var,".pdf",sep=""),width=11,height=8.5)
+
+
+# Initialize loop over measurement type
+for(a.loopVar in c("TVOC","PM10","Met","vs-Met"))
+#for(a.loopVar in c("vs-Met"))
+{
+	# Set vector of strings for 'a.loopVar' below
+	#
+	# Set TVOC and PM10 vector for 'a.loopVar'
+	if(a.loopVar=="TVOC" | a.loopVar=="PM10" | a.loopVar=="vs-Met")
+	{
+		# Set vector for TVOC and PM10
+		figType.vec=c("FAM-1","FAM-2","FAM-3","FAM-4","FAM-5","FAM-6")
+		
+	}	# End 'if(a.loopVar=="TVOC" | a.loopVar=="PM10" | a.loopVar=="vs-Met")'
+
+	# Set Meteorological vector for 'a.loopVar'
+	if(a.loopVar=="Met")
+	{
+		# Set vector for Meteorological data
+		figType.vec=c("T109_F_Avg","R_Hum_Avg","WS_mph_15m","WindDir_15m")
+		
+	}	# End 'if(a.loopVar=="Met")'
+
+	# Initialize loop over page type
+	for(page.loopVar in c("composite","full"))
+	{
+		# Set page layout
+		#
+		# Set 'composite'
+		if(page.loopVar=="composite")
+		{
+			# Set Met composite layout
+			if(a.loopVar=="Met")
+			{
+				# Set layout
+				par(mfrow=c(2,2))
+
+				# Set title cex size
+				titleCex.var=1.2
+
+			}	# End 'if(a.loopVar=="Met")'
+
+			# Set Met composite layout
+			if(a.loopVar!="Met" & a.loopVar!="vs-Met")
+			{
+				# Set layout
+				par(mfrow=c(3,2))
+
+				# Set title cex size
+				titleCex.var=0.9
+
+			}	# End 'if(a.loopVar!="Met" & a.loopVar!="vs-Met")'
+
+			# Set Met composite layout
+			if(a.loopVar=="vs-Met")
+			{
+				# Set layout
+				par(mfrow=c(3,2),mar=c(5.1,4.1,4.1,4.1))
+
+				# Set title cex size
+				titleCex.var=0.8
+				axisCex.var=0.7
+
+			}	# End 'if(a.loopVar=="vs-Met")'
+
+		}	# End 'if(page.loopVar=="composite")'
+	
+		# Set 'composite' layout
+		if(page.loopVar=="full")
+		{
+			# Set par for all figs but vs-Met
+			if(a.loopVar!="vs-Met")
+			{
+				# Set layout
+				par(mfrow=c(1,1))
+
+				# Set title cex size
+				titleCex.var=2.2
+
+			}	# End 'if(a.loopVar!="vs-Met")'
+
+			# Set par for vs-Met
+			if(a.loopVar=="vs-Met")
+			{
+				# Set layout
+				par(mfrow=c(1,1),mar=c(5.5,4.1,4.1,4.1))
+
+				# Set title cex size
+				titleCex.var=1.7
+				axisCex.var=1.1
+
+			}	# End 'if(a.loopVar=="vs-Met")'
+	
+		}	# End 'if(page.loopVar=="full")'
+
+		# Initialize loop through dataframes
+		for(b.loopVar in figType.vec)
+		{
+			#-------------------------------------------------
+			# Pre-process data
+		
+			# Set 'plot.df' to dataframe corresponding to 'b.loopVar' variable
+			#
+			# If statement to check for TVOC or PM10 loop iteration
+			if(a.loopVar!="Met")
+			{
+				# If statement to check 'b.loopVar' for "FAM-1"
+				if(b.loopVar=="FAM-1")
+				{
+					# Set 'plot.df' to 'fam1_sub2.df'
+					plot.df=fam1_sub2.df
+			
+				}	# End 'if(b.loopVar=="FAM-1")'
+			
+				# If statement to check 'b.loopVar' for "FAM-2"
+				if(b.loopVar=="FAM-2")
+				{
+					# Set 'plot.df' to 'fam2_sub2.df'
+					plot.df=fam2_sub2.df
+			
+				}	# End 'if(b.loopVar=="FAM-2")'
+			
+				# If statement to check 'b.loopVar' for "FAM-3"
+				if(b.loopVar=="FAM-3")
+				{
+					# Set 'plot.df' to 'fam3_sub2.df'
+					plot.df=fam3_sub2.df
+			
+				}	# End 'if(b.loopVar=="FAM-3")'
+			
+				# If statement to check 'b.loopVar' for "FAM-4"
+				if(b.loopVar=="FAM-4")
+				{
+					# Set 'plot.df' to 'fam4_sub2.df'
+					plot.df=fam4_sub2.df
+			
+				}	# End 'if(b.loopVar=="FAM-4")'
+			
+				# If statement to check 'b.loopVar' for "FAM-5"
+				if(b.loopVar=="FAM-5")
+				{
+					# Set 'plot.df' to 'fam5_sub2.df'
+					plot.df=fam5_sub2.df
+			
+				}	# End 'if(b.loopVar=="FAM-5")'
+			
+				# If statement to check 'b.loopVar' for "FAM-6"
+				if(b.loopVar=="FAM-6")
+				{
+					# Set 'plot.df' to 'fam6_sub2.df'
+					plot.df=fam6_sub2.df
+			
+				}	# End 'if(b.loopVar=="FAM-6")'
+	
+				# Set max values for TVOC and PM10
+				#
+				# Set top three max values for TVOC from 'plot.df'
+				maxTvoc_1.var=max(as.numeric(plot.df$TVOC_Avg[plot.df$TVOC_PM10_Status_Avg!="NAN" & is.na(plot.df$TVOC_Avg)==FALSE]))
+				maxTvoc_2.var=max(as.numeric(plot.df$TVOC_Avg[plot.df$TVOC_PM10_Status_Avg!="NAN" & is.na(plot.df$TVOC_Avg)==FALSE & plot.df$TVOC_Avg!=maxTvoc_1.var]))
+				maxTvoc_3.var=max(as.numeric(plot.df$TVOC_Avg[plot.df$TVOC_PM10_Status_Avg!="NAN" & is.na(plot.df$TVOC_Avg)==FALSE & plot.df$TVOC_Avg!=maxTvoc_1.var
+					& plot.df$TVOC_Avg!=maxTvoc_2.var]))
+	
+				# Set top three max values for PM10 from 'plot.df'
+				maxPM10_1.var=max(as.numeric(plot.df$PM10_Avg[plot.df$TVOC_PM10_Status_Avg!="NAN" & is.na(plot.df$PM10_Avg)==FALSE]))
+				maxPM10_2.var=max(as.numeric(plot.df$PM10_Avg[plot.df$TVOC_PM10_Status_Avg!="NAN" & is.na(plot.df$PM10_Avg)==FALSE & plot.df$PM10_Avg!=maxPM10_1.var]))
+				maxPM10_3.var=max(as.numeric(plot.df$PM10_Avg[plot.df$TVOC_PM10_Status_Avg!="NAN" & is.na(plot.df$PM10_Avg)==FALSE & plot.df$PM10_Avg!=maxPM10_1.var
+					& plot.df$PM10_Avg!=maxPM10_2.var]))
+
+			}	# End 'if(a.loopVar!="Met")'
+
+			# If statement to check for Meteorological loop iteration
+			if(a.loopVar=="Met")
+			{
+				# Set 'plot.df' to 'met_sub2.df'
+				plot.df=met_sub2.df
+
+			}	# End 'if(a.loopVar=="Met")'
+		
+			# End 'Pre-process data' 
+			#-------------------------------------------------
+		
+			#-------------------------------------------------
+			# Graphical plotting section
+		
+			# If statement to check 'a.loopVar' for TVOC
+			if(a.loopVar=="TVOC")
+			{
+				# Generate barplot of raw 'PM10_Avg' measurements
+				barplot(height=as.numeric(plot.df$TVOC_Avg),yaxt="n",las=1,ylim=c(0,maxTvoc.var))
+		
+				# Add barplot of measurements taken during calibrations, flagged with NANs
+				barplot(height=as.numeric(plot.df$tvoc_nan),add=TRUE,yaxt="n",col="red")
+		
+				# Add box to plot
+				box(lwd=2)
+		
+				# Set 'xaxis.vec'
+				xaxis.vec=barplot(height=as.numeric(plot.df$TVOC_Avg),yaxt="n",las=1,ylim=c(0,maxTvoc.var),plot=FALSE)
+
+				# Add ablines for top three max measurements
+				abline(h=maxTvoc_1.var,col="red",lty=2)
+				abline(h=maxTvoc_2.var,col="orange",lty=2)
+				abline(h=maxTvoc_3.var,col="yellow",lty=2)
+		
+			}	# End 'if(a.loopVar=="TVOC")'
+	
+			# If statement to check 'a.loopVar' for PM10
+			if(a.loopVar=="PM10")
+			{
+				# Generate barplot of raw 'PM10_Avg' measurements
+				barplot(height=as.numeric(plot.df$PM10_Avg),yaxt="n",las=1,ylim=c(0,maxPm10.var))
+
+				# Add barplot of measurements taken during calibrations, flagged with NANs
+				barplot(height=as.numeric(plot.df$pm10_nan),add=TRUE,yaxt="n",col="red")
+
+				# Add box to plot
+				box(lwd=2)
+
+				# Set 'xaxis.vec'
+				xaxis.vec=barplot(height=as.numeric(plot.df$PM10_Avg),yaxt="n",las=1,ylim=c(0,maxPm10.var),plot=FALSE)
+
+				# Add ablines for top three max measurements
+				abline(h=maxPM10_1.var,col="red",lty=2)
+				abline(h=maxPM10_2.var,col="orange",lty=2)
+				abline(h=maxPM10_3.var,col="yellow",lty=2)
+
+			}	# End 'if(a.loopVar=="PM10")'
+
+			# If statement to check 'a.loopVar' Met
+			if(a.loopVar=="Met")
+			{
+				# Generate scatterplot of meteorological data
+				plot(y=as.numeric(plot.df[,b.loopVar]),x=plot.df$rownum,yaxt="n",xaxt="n",ylab=NA,xlab=NA,col="red",lwd=4)
+
+				# Add trendline
+				abline(lm(as.numeric(plot.df[,b.loopVar]) ~ plot.df$rownum),lty=2) 
+
+				# Add box to plot
+				box(lwd=2)
+
+			}	# End 'if(a.loopVar=="Met")'
+
+			# If statement to check 'a.loopVar' for PM10
+			if(a.loopVar=="vs-Met")
+			{
+				# Generate barplot of raw 'PM10_Avg' measurements
+				barplot(height=as.numeric(plot.df$PM10_Avg),yaxt="n",las=1,ylim=c(0,maxPm10HumWS.var))
+
+				# Add barplot of measurements taken during calibrations, flagged with NANs
+				barplot(height=as.numeric(plot.df$pm10_nan),add=TRUE,yaxt="n",col="red")
+
+				# Set 'xaxis.vec'
+				xaxis.vec=barplot(height=as.numeric(plot.df$PM10_Avg),yaxt="n",las=1,ylim=c(0,maxPm10HumWS.var),plot=FALSE)
+
+				# Set 'xaxis.vec' vector into meteorological dataframe
+				met_sub2.df$xaxis=xaxis.vec
+
+				# Add humidity points to figure
+				points(y=as.numeric(met_sub2.df$R_Hum_Avg),x=met_sub2.df$xaxis,yaxt="n",xaxt="n",ylab=NA,xlab=NA,col="red")
+
+				# Add axes for PM10 measurements
+				axis(side=2,at=seq(0,maxPm10HumWS.var,10),las=1)
+				axis(side=1,at=xaxis.vec,labels=plot.df$TIME,las=2)
+
+				# Set par to plot on top of figure
+				par(new=TRUE)
+
+				# Add wind speed plot
+				plot(y=as.numeric(met_sub2.df$WS_mph_15m),x=met_sub2.df$xaxis,yaxt="n",xaxt="n",ylab=NA,xlab=NA,col="green")
+
+				# Add trendline for wind speed
+				abline(lm(as.numeric(met_sub2.df$WS_mph_15m) ~ met_sub2.df$xaxis),lty=2,col="green")
+
+				# Add wind speed axis
+				axis(side=4,las=1,tck=0,line=-0.6,lwd=0)
+
+				# Add box to plot
+				box(lwd=2)
+
+			}	# End 'if(a.loopVar=="vs-Met")'
+		
+			# End 'Graphical plotting section'
+			#-------------------------------------------------
+		
+			#-------------------------------------------------
+			# Graphical axes section
+
+			# If statement to check 'a.loopVar' for "TVOC"
+			if(a.loopVar=="TVOC")
+			{
+				# Add axes for TVOC measurements
+				axis(side=2,at=seq(0,maxTvoc.var,0.1),las=1)
+				axis(side=1,at=xaxis.vec,labels=plot.df$TIME,las=2)
+		
+			}	# End 'if(a.loopVar=="TVOC")'
+
+			# If statement to check 'a.loopVar' for "PM10"
+			if(a.loopVar=="PM10")
+			{
+				# Add axes for PM10 measurements
+				axis(side=2,at=seq(0,maxPm10.var,10),las=1)
+				axis(side=1,at=xaxis.vec,labels=plot.df$TIME,las=2)
+		
+			}	# End 'if(a.loopVar=="PM10")'
+
+			# If statement to check 'a.loopVar' for "Met"
+			if(a.loopVar=="Met")
+			{
+				# Add axes for TVOC measurements
+				axis(side=2,las=1)
+				axis(side=1,at=plot.df$rownum,labels=plot.df$TIME,las=2)
+		
+			}	# End 'if(a.loopVar=="Met")'
+
+			# End 'Graphical axes section'
+			#-------------------------------------------------
+		
+			#-------------------------------------------------
+			# Legend annotations
+		
+			# If statement to check for pertinent figure
+			if(a.loopVar=="TVOC")
+			{
+				# Add legend to figure
+				legend("topright",legend=c("Raw data","Cal. data",
+					paste("Max1: ",maxTvoc_1.var),
+					paste("Max2: ",maxTvoc_2.var),
+					paste("Max3: ",maxTvoc_3.var)),lty=c(NA,NA,2,2,2),pch=c(15,15,NA,NA,NA),col=c("gray","red","red","orange","yellow"),inset=0.03)
+		
+				# Add annotation about missing data
+				if(length(plot.df$TIMESTAMP[is.na(plot.df$TIMESTAMP)==TRUE])>=1)
+				{
+					# Add annotation to topleft corner
+					legend("topleft",legend="*Dataset missing values.",bty="n")
+
+				}	# End 'if(length(plot.df$TIMESTAMP[is.na(plot.df$TIMESTAMP)==TRUE])>1)'
+
+			}	# End 'if(a.loopVar=="TVOC")'
+
+			# If statement to check for pertinent figure
+			if(a.loopVar=="PM10")
+			{
+				# Add legend to figure
+				legend("topright",legend=c("Raw data","Cal. data",
+					paste("Max1: ",maxPM10_1.var),
+					paste("Max2: ",maxPM10_2.var),
+					paste("Max3: ",maxPM10_3.var)),lty=c(NA,NA,2,2,2),pch=c(15,15,NA,NA,NA),col=c("gray","red","red","orange","yellow"),inset=0.03)
+
+				# Add annotation about missing data
+				if(length(plot.df$TIMESTAMP[is.na(plot.df$TIMESTAMP)==TRUE])>=1)
+				{
+					# Add annotation to topleft corner
+					legend("topleft",legend="*Dataset missing values.",bty="n")
+
+				}	# End 'if(length(plot.df$TIMESTAMP[is.na(plot.df$TIMESTAMP)==TRUE])>1)'
+
+			}	# End 'if(a.loopVar=="TVOC")'
+
+			# If statement to check for pertinent figure
+			if(a.loopVar=="Met")
+			{
+				# Add legend to figure
+				legend("topright",legend=c(paste("Min: ",round(min(as.numeric(plot.df[,b.loopVar])),digits=1)),
+											paste("Max: ",round(max(as.numeric(plot.df[,b.loopVar])),digits=1)),
+											paste("Stat. mean: ",round(mean(as.numeric(plot.df[,b.loopVar])),digits=1)),
+											paste("Std dev: ",round(sd(as.numeric(plot.df[,b.loopVar])),digits=1)),
+											paste("Alg. avg WD: ",round(as.numeric(plot.df$windDir_avg[1]),digits=1))),pch=NA,inset=0.03)
+		
+			}	# End 'if(a.loopVar=="Met")'
+
+			# If statement to check for pertinent figure
+			if(a.loopVar=="vs-Met")
+			{
+				# Add legend to figure
+				legend("topright",legend=c("Raw PM10","Cal. PM10","R_Hum_Avg","WS_mph_15m"),pch=c(15,15,1,1),col=c("gray","red","red","green"),inset=0.03)
+
+				# Add annotation about missing data
+				if(length(plot.df$TIMESTAMP[is.na(plot.df$TIMESTAMP)==TRUE])>=1)
+				{
+					# Add annotation to topleft corner
+					legend("topleft",legend="*Dataset missing values.",bty="n")
+
+				}	# End 'if(length(plot.df$TIMESTAMP[is.na(plot.df$TIMESTAMP)==TRUE])>1)'
+
+			}	# End 'if(a.loopVar=="vs-Met")'
+		
+			# End 'Legend annotations'
+			#-------------------------------------------------
+		
+			#-------------------------------------------------
+			# Titles, axis labels and other annotations
+	
+			# If statement to check 'a.loopVar' for "TVOC"
+			if(a.loopVar=="TVOC")
+			{
+				# Add title to barplot by number
+				mtext(paste(b.loopVar," TVOC Measurements for ",dataDate.var,sep=""),font=2,cex=titleCex.var,side=3,line=2,adj=1)
+			
+				# Add y-axis label
+				yaxis.loc=par("usr")
+				text(yaxis.loc[1],yaxis.loc[4],"TVOC ppm\n15m avg",pos=3,xpd=TRUE,offset=1,font=2)
+			
+			}	# End 'if(a.loopVar=="TVOC")'
+	
+			# If statement to check 'a.loopVar' for "PM10"
+			if(a.loopVar=="PM10")
+			{
+				# Add title to barplot by number
+				mtext(paste(b.loopVar," PM10 Measurements for ",dataDate.var,sep=""),font=2,cex=titleCex.var,side=3,line=2,adj=1)
+			
+				# Add y-axis label
+				yaxis.loc=par("usr")
+				text(yaxis.loc[1],yaxis.loc[4],"PM10 ug/m3\n15m avg",pos=3,xpd=TRUE,offset=1,font=2)
+			
+			}	# End 'if(a.loopVar=="PM10")'
+
+			# If statement to check 'a.loopVar' for "Met"
+			if(a.loopVar=="Met")
+			{
+				# Add title to barplot by number
+				mtext(paste(b.loopVar," Measurements for ",dataDate.var,sep=""),font=2,cex=titleCex.var,side=3,line=2,adj=1)
+			
+				# Add y-axis label
+				yaxis.loc=par("usr")
+				text(yaxis.loc[1],yaxis.loc[4],"15m avg",pos=3,xpd=TRUE,offset=1,font=2)
+			
+			}	# End 'if(a.loopVar=="Met")'
+
+			# If statement to check 'a.loopVar' for "vs-Met"
+			if(a.loopVar=="vs-Met")
+			{
+				# Add title to barplot by number
+				mtext(paste(b.loopVar," Measurements vs. R_Hum_Avg & WS_mph_15m for ",dataDate.var,sep=""),font=2,cex=titleCex.var,side=3,line=2,adj=1)
+			
+				# Add y-axis labels
+				yaxis.loc=par("usr")
+				text(yaxis.loc[1],yaxis.loc[4],"15m avg",pos=3,xpd=TRUE,offset=1,font=2)
+				mtext(side=2,"PM10 ug/m3 & R_Hum_Avg",las=3,line=2.5,cex=axisCex.var)
+				mtext(side=4,"WS_mph_15m",las=3,line=1.6,cex=axisCex.var)
+			
+			}	# End 'if(a.loopVar=="vs-Met")'
+
+			# For not vs-Met
+			if(a.loopVar!="vs-Met")
+			{
+				# Add generation time to figure
+				par(xpd=NA)
+				mtext(paste("Figure generated: ",Sys.time(),sep=""),side=4,adj=0,cex=0.7,line=1.1)
+				par(xpd=FALSE)
+
+			}	# End 'if(a.loopVar!="vs-Met")'
+
+			# For vs-Met
+			if(a.loopVar=="vs-Met")
+			{
+				# Add generation time to figure
+				par(xpd=NA)
+				mtext(paste("Figure generated: ",Sys.time(),sep=""),side=4,adj=0,cex=0.7,line=2.7)
+				par(xpd=FALSE)
+
+			}	# End 'if(a.loopVar=="vs-Met")'
+		
+			# End 'Titles, axis labels and other annotations'
+			#-------------------------------------------------
+		
+		}	# End 'for(b.loopVar in figType.vec)'
+
+	}	# End 'for(page.loopVar in c("composite","full"))'
+
+}	# End 'for(a.loopVar in c("TVOC","PM10","Met","vs-Met"))'
+
+
+# End 'Write figures to file'
+dev.off()
+
+# End 'Figure generation section'
+#=================================================
+
+

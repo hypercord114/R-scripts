@@ -1,0 +1,1188 @@
+script_name.var="graingerVendingAnalysis_2023-09-12"
+dataDate.var="2023-09-12"
+#
+#
+# F&J
+# Title:  Grainger vending issuance analysis
+# Author:  K. Navagh
+# Date Created:  2023-01-23
+# Date Last Updated:  2023-08-15
+# Update notes:  Per Jason Goff, $SKU=="1226" in raw data is "Hot Mill Gloves" [2023-01-27, KJN]
+# Update notes:  Added $group vector to raw data to lump supervisors into department data; also recreated old outputs as B2 and C2 tables.
+#				 Additionally, added graphical plotting section to generate histograms.  Histograms are still unadorned.  [2023-02-02, KJN]
+# Update notes:  Duplicate entries in raw data due to multiple $User.Group.Name classes assigned to employees.  Per Mr. Chapman on 2023-02-03,
+#				 it is established that the vending machines default to whichever $User.Group.Name has the least limits.  It would be best
+#				 to set each employee to a single $User.Group.Name but can filter out multiple entries with script.  Multiple entries are
+#				 causing problem with data tabulation and estimated dispensing costs.  Adding filter to script to remove duplicate entries. [2023-02-03, KJN]
+# Update notes:  Modified code to set $Month vector elements in data_mod1.df; a bit overcomplicated maybe.  Sets January data appropriately.
+#                Also set $Year vector.  [2023-02-08, KJN]
+# Update notes:  Downloaded issuance data from Grainger inclusive of February 2023 data.  Sifet Ajsic and Harshad Patel dispensed items for
+#                first time and had to reset their $group.  Also reset Mark Foraker $group from Machine Shop to Maintenance.
+# Update notes:  Added March data to figures.
+# Update notes:  Added April data to figures.
+# Update notes:  Added June data to figures.
+# Update notes:  Added July data to figures. [2023-08-15, KJN]
+# Update notes:  Added August data to figures.  Also added uncommented section of code to generate an allocation limit file for Grainger
+#                vending machines; to be submit to Osvaldo Rodriguez (osvaldo.rodriguez@grainger.com). [2023-09-12, KJN]
+#
+# Summary:  Calculates average issuance of each item per department and outputs tables/graphs.
+#
+
+#=================================================
+# Begin 'Reading data into R'
+
+# Initialize route variable
+route.strVar="//fjfile02/users$/knavagh/Documents/EMS documentation/Grainger/issuance/2022-xx_analysis/"
+
+# Read in data files to initialize dataframes
+data_raw.df=read.csv(paste(route.strVar,"input/Consumables!_Issuanc_2023-09-12.csv",sep=""),header=TRUE,sep=",",as.is=TRUE)
+
+# End 'Reading data into R'
+#=================================================
+
+
+#=================================================
+# Begin 'Data pre-processing'
+
+#--------------------
+# Copy dataframe
+data_mod1.df=data_raw.df
+#--------------------
+
+#--------------------
+# Set manageable date vectors
+#
+# Add new $Month vector and mod date data
+
+# Add $Date vector
+data_mod1.df$Date=NA
+
+# Subset funky date vector to 2 chars into $Date
+data_mod1.df$Date=substr(data_mod1.df$ï..Date,1,10)
+
+# Add $Month vector
+data_mod1.df$Month=substr(data_mod1.df$ï..Date,6,7)
+data_mod1.df$Month[data_mod1.df$Month=="01"]="Jan"
+data_mod1.df$Month[data_mod1.df$Month=="02"]="Feb"
+data_mod1.df$Month[data_mod1.df$Month=="03"]="Mar"
+data_mod1.df$Month[data_mod1.df$Month=="04"]="Apr"
+data_mod1.df$Month[data_mod1.df$Month=="05"]="May"
+data_mod1.df$Month[data_mod1.df$Month=="06"]="Jun"
+data_mod1.df$Month[data_mod1.df$Month=="07"]="Jul"
+data_mod1.df$Month[data_mod1.df$Month=="08"]="Aug"
+data_mod1.df$Month[data_mod1.df$Month=="09"]="Sep"
+data_mod1.df$Month[data_mod1.df$Month=="10"]="Oct"
+data_mod1.df$Month[data_mod1.df$Month=="11"]="Nov"
+data_mod1.df$Month[data_mod1.df$Month=="12"]="Dec"
+
+#	# Set dataframe for naming months in $Month vector
+#	monthSet.df=data.frame(monthStr=unique(data_mod1.df$Date),
+#							month=NA)
+#	monthSet.df$month[monthSet.df$monthStr=="01"]="Jan"
+#	monthSet.df$month[monthSet.df$monthStr=="02"]="Feb"
+#	monthSet.df$month[monthSet.df$monthStr=="03"]="Mar"
+#	monthSet.df$month[monthSet.df$monthStr=="04"]="Apr"
+#	monthSet.df$month[monthSet.df$monthStr=="05"]="May"
+#	monthSet.df$month[monthSet.df$monthStr=="06"]="Jun"
+#	monthSet.df$month[monthSet.df$monthStr=="07"]="Jul"
+#	monthSet.df$month[monthSet.df$monthStr=="08"]="Aug"
+#	monthSet.df$month[monthSet.df$monthStr=="09"]="Sep"
+#	monthSet.df$month[monthSet.df$monthStr=="10"]="Oct"
+#	monthSet.df$month[monthSet.df$monthStr=="11"]="Nov"
+#	monthSet.df$month[monthSet.df$monthStr=="12"]="Dec"
+#	
+#	# grep the $Date vector and add qualifier to $Month vector in loop
+#	#
+#	# Loop over vectors for $Month
+#	for(date.loopvar in unique(data_mod1.df$Month)) {
+#	
+#		# Add entry in months.vec into $Month for corresponding substring in $Date
+#		data_mod1.df$Month[data_mod1.df$Month==date.loopvar]=monthSet.df$month[monthSet.df$monthStr==date.loopvar]
+#		
+#		}	# End 'Loop over vectors for $Month'
+
+# Set $yearStr vector and $Year vector
+#	data_mod1.df$yearStr=substr(data_mod1.df$ï..Date,5,10)
+data_mod1.df$Year=substr(data_mod1.df$ï..Date,1,4)
+#	data_mod1.df$Year[grepl("2022",data_mod1.df$yearStr)]="2022"
+#	data_mod1.df$Year[grepl("2023",data_mod1.df$yearStr)]="2023"
+#--------------------
+
+#--------------------
+# Create $user vector
+data_mod1.df$user=paste(data_mod1.df$Last.Name,", ",data_mod1.df$First.Name,sep="")
+#--------------------
+
+#--------------------
+# Mod $SKU.Description for $SKU=="1226"; per Jason Goff on 2023-01-27 this is "Hot Mill Gloves"
+data_mod1.df$SKU.Description[data_mod1.df$SKU=="1226"]="Hot Mill Gloves"
+data_mod1.df$Replacement.Cost.[data_mod1.df$SKU=="1226"]=2.99
+#--------------------
+
+#--------------------
+# Copy and mod the $User.Group.Name vector for supervisors to indicate which department the supervisor typically works in
+data_mod1.df$group=data_mod1.df$User.Group.Name
+
+# Set $dept vector for supervisors
+# > unique(stats_a.df$user[stats_a.df$dept=="SUPERVISOR A"])
+#  [1] "Zuhric, Omer"        "Whalen, Tyler"       "Foraker, Mark"       "D'Hollander, Mark"   "Parker, Michael"     "Spears, Timothy"     "Sabic, Nermin"       "Rosenberger, Joshua" "Rattray, William"   
+# [10] "Voytovich, Igor"     "Navagh, Kelly"       "Chapman, William"    "Newsome, Stanley"    "Ramasamy, Kousik"    "Cook, Keith"         "Lemessurier, Eric"   "Patterson, Jeremy" 
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Zuhric, Omer"]="MAINTENANCE"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Whalen, Tyler"]="MAINTENANCE"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Foraker, Mark"]="MAINTENANCE"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="D'Hollander, Mark"]="FOUNDRY"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Parker, Michael"]="MACHINE SHOP"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Spears, Timothy"]="MACHINE SHOP"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Sabic, Nermin"]="MACHINE SHOP"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Rosenberger, Joshua"]="FOUNDRY"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Rattray, William"]="GRINDING"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Voytovich, Igor"]="MACHINE SHOP"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Navagh, Kelly"]="MAINTENANCE"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Chapman, William"]="MAINTENANCE"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Newsome, Stanley"]="FOUNDRY"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Ramasamy, Kousik"]="QC"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Cook, Keith"]="MAINTENANCE"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Lemessurier, Eric"]="HARD IRON"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Patterson, Jeremy"]="QC"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Ajsic, Sifet"]="MACHINE SHOP"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Patel, Harshad"]="QC"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR A" & data_mod1.df$user=="Rattray, William, Jr."]="QC"
+
+# > unique(stats_a.df$user[stats_a.df$dept=="SUPERVISOR B"])
+#  [1] "D'Hollander, Mark"  "Egbert, Shawn"      "Navagh, Kelly"      "Ascioti, James"     "Bauer, Jacob"       "Hogan, Kevin"       "Newsome, Stanley"   "Ifraim, Gary"       "Houghtaling, Terry"
+# [10] "Kashwal, Mongda"    "Casey, Stephen"     "Reilley, Michael"   "Gould, Gerry"       "Mere, Ossama"       "Matkows, Thomas"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="D'Hollander, Mark"]="FOUNDRY"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Egbert, Shawn"]="METALLURGY"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Navagh, Kelly"]="MAINTENANCE"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Ascioti, James"]="FOUNDRY"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Bauer, Jacob"]="METALLURGY"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Hogan, Kevin"]="QC"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Newsome, Stanley"]="FOUNDRY"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Ifraim, Gary"]="QC"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Houghtaling, Terry"]="QC"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Kashwal, Mongda"]="GRINDING"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Casey, Stephen"]="QC"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Reilley, Michael"]="QC"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Gould, Gerry"]="QC"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Mere, Ossama"]="METALLURGY"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Matkows, Thomas"]="QC"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Spears, Timothy"]="CORE ROOM"
+data_mod1.df$group[data_mod1.df$group=="SUPERVISOR B" & data_mod1.df$user=="Magallanes, Jun"]="QC"
+#--------------------
+
+#--------------------
+# Rename the $User.Group.Name entries in $group vector
+# > unique(stats_a.df$dept)
+#  [1] "Foundry A"      "SUPERVISOR A"   "MAINTENANACE B" "MAINTENANACE A" "CORE ROOM"      "ASSEMBLY"       "SUPERVISOR B"   "GRINDING"       "HARD IRON"      "MACHINE SHOP"   "Finishing"     
+# [12] "E-MELT"         "Annealing"      ""
+data_mod1.df$group[data_mod1.df$group=="Foundry A"]="FOUNDRY"
+data_mod1.df$group[data_mod1.df$group=="MAINTENANACE B"]="MAINTENANCE"
+data_mod1.df$group[data_mod1.df$group=="MAINTENANACE A"]="MAINTENANCE"
+data_mod1.df$group[data_mod1.df$group=="Finishing"]="FINISHING"
+data_mod1.df$group[data_mod1.df$group=="Annealing"]="ANNEALING"
+#--------------------
+
+#--------------------
+# ** Subset out Aug 2022 data
+#data_mod2.df=data_mod1.df[data_mod1.df$Month!="Aug",]
+data_mod1.sub2022=data_mod1.df[data_mod1.df$Year=="2022",]
+data_mod1.sub2023=data_mod1.df[data_mod1.df$Year=="2023",]
+data_mod1.sub2022mod=data_mod1.sub2022[data_mod1.sub2022$Month!="Aug",]
+data_mod2.df=rbind(data_mod1.sub2023,data_mod1.sub2022mod)
+#--------------------
+
+#--------------------
+# Section to track $user entries with multiple $User.Group.Name and filter out duplicate rows
+
+# Copy dataframe
+data_mod3.df=data_mod2.df
+
+# Set up tracking dataframe
+userMultGroup.df=data.frame(user=NA,
+							groupNum=NA,
+							groups=NA)
+
+# Loop over $user
+for(user.loopvar in unique(data_mod3.df$user)) {
+
+	# Logic to check number of $User.Group.Name
+	if(length(unique(data_mod3.df$User.Group.Name[data_mod3.df$user==user.loopvar]))>1) {
+
+		# Set up tracking dataframe temp
+		userMultGroup_temp.df=data.frame(user=user.loopvar,
+											groupNum=length(unique(data_mod3.df$User.Group.Name[data_mod3.df$user==user.loopvar])),
+											groups=paste(unique(data_mod3.df$User.Group.Name[data_mod3.df$user==user.loopvar]),collapse=" "))
+
+		# Logical to check how to stack temps into main userMultGroup.df
+		if(is.na(userMultGroup.df$user[1])==FALSE) {
+
+			# Stack into userMultGroup.df
+			userMultGroup.df=rbind(userMultGroup.df,userMultGroup_temp.df)
+
+		}	# End 'Logical to check how to stack temps into main userMultGroup.df'
+
+		# Logical to check how to stack temps into main userMultGroup.df
+		if(is.na(userMultGroup.df$user[1])==TRUE) {
+
+			# Rewrite stats_b.df
+			userMultGroup.df=userMultGroup_temp.df
+
+		}	# End 'Logical to check how to stack temps into main userMultGroup.df'
+
+	} # End 'Logic to check number of $User.Group.Name'
+
+} # End 'Loop over $user'
+
+# Write userMultGroup.df to file
+write.csv(userMultGroup.df,file=paste(route.strVar,"output/",script_name.var,"_userMultGroup_",dataDate.var,".csv",sep=""))
+
+# Remove duplicate entries for users with multiple $User.Group.Name entries
+#
+# Check on length of userMultGroup.df
+if(nrow(userMultGroup.df)>=1 & is.na(userMultGroup.df$user[1])==FALSE) {
+
+	# Loop over $user in userMultGroup.df
+	for(user.loopvar in unique(userMultGroup.df$user)) {
+	
+		# Filter out duplicate entries
+		#
+		# Filter out all entries for user.loopvar
+		data_mod3.df=data_mod3.df[data_mod3.df$user!=user.loopvar,]
+	
+		# Create temp with just $user==user.loopvar and not second entry of unique($User.Group.Name)
+		data_mod3_temp.df=data_mod2.df[data_mod2.df$user==user.loopvar & data_mod2.df$User.Group.Name!=unique(data_mod2.df$User.Group.Name[data_mod2.df$user==user.loopvar])[2],]
+	
+		# Stack temp into data_mod3.df
+		data_mod3.df=rbind(data_mod3.df,data_mod3_temp.df)
+	
+	} # End 'Loop over $user in userMultGroup.df'
+
+} # End 'Check on length of userMultGroup.df'
+#--------------------
+
+#--------------------
+# Filter out Administrator data and print
+data_mod4.df=data_mod3.df[data_mod3.df$user!="Administrator" & data_mod3.df$user!=", Administrator",]
+
+# Write Administrator data to file
+write.csv(data_mod3.df[data_mod3.df$user=="Administrator" | data_mod3.df$user==", Administrator",],file=paste(route.strVar,"output/",script_name.var,"_adminData_",dataDate.var,".csv",sep=""))
+#--------------------
+
+#--------------------
+# Price index file
+temp.df=data.frame(SKU=unique(data_mod3.df$SKU))
+temp.df$SKU.Description=NA
+temp.df$SKU.UOM=NA
+temp.df$Replacement.Cost.=NA
+temp.df$Program.Nickname=NA
+temp.df$group=NA
+temp.df$User.Group.Name=NA
+
+for(sku.loopvar in unique(temp.df$SKU)) {
+	temp.df$SKU.Description[temp.df$SKU==sku.loopvar]=data_mod3.df$SKU.Description[data_mod3.df$SKU==sku.loopvar][1]
+	temp.df$SKU.UOM[temp.df$SKU==sku.loopvar]=data_mod3.df$SKU.UOM[data_mod3.df$SKU==sku.loopvar][1]
+	temp.df$Replacement.Cost.[temp.df$SKU==sku.loopvar]=data_mod3.df$Replacement.Cost.[data_mod3.df$SKU==sku.loopvar][1]
+	temp.df$Program.Nickname[temp.df$SKU==sku.loopvar]=paste(unique(data_mod3.df$Program.Nickname[data_mod3.df$SKU==sku.loopvar]),collapse=", ")
+	temp.df$group[temp.df$SKU==sku.loopvar]=paste(unique(data_mod3.df$group[data_mod3.df$SKU==sku.loopvar]),collapse=", ")
+	temp.df$User.Group.Name[temp.df$SKU==sku.loopvar]=paste(unique(data_mod3.df$User.Group.Name[data_mod3.df$SKU==sku.loopvar]),collapse=", ")
+}
+
+write.csv(temp.df,file=paste(route.strVar,"output/",script_name.var,"_priceIndexEtc_",dataDate.var,".csv",sep=""))
+#--------------------
+
+#--------------------
+# Mod data_mod4.df
+data_mod4.df$craftcode=NA
+data_mod4.df$craftcodedescr=NA
+
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="MAINTENANACE A"]="FRAZER & JONES SOLVAY NY A MAINTENANACE A"
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="MAINTENANACE B"]="FRAZER & JONES SOLVAY NY B MAINTENANACE B"
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="MACHINE SHOP"]="FRAZER & JONES SOLVAY NY C MACHINE SHOP"
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="E-MELT"]="FRAZER & JONES SOLVAY NY D E-MELT"
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="GRINDING"]="FRAZER & JONES SOLVAY NY E GRINDING"
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="CORE ROOM"]="FRAZER & JONES SOLVAY NY F CORE ROOM"
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="ASSEMBLY"]="FRAZER & JONES SOLVAY NY G ASSEMBLY"
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="SUPERVISOR A"]="FRAZER & JONES SOLVAY NY H SUPERVISOR A"
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="SUPERVISOR B"]="FRAZER & JONES SOLVAY NY I SUPERVISOR B"
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="HARD IRON"]="FRAZER & JONES SOLVAY NY K HARD IRON"
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="Foundry A"]="FRAZER & JONES SOLVAY NY L Foundry A"
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="Annealing"]="FRAZER & JONES SOLVAY NY N Annealing"
+data_mod4.df$craftcodedescr[data_mod4.df$User.Group.Name=="Finishing"]="FRAZER & JONES SOLVAY NY O Finishing"
+
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="MAINTENANACE A"]="00692 CC A"
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="MAINTENANACE B"]="00692 CC B"
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="MACHINE SHOP"]="00692 CC C"
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="E-MELT"]="00692 CC D"
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="GRINDING"]="00692 CC E"
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="CORE ROOM"]="00692 CC F"
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="ASSEMBLY"]="00692 CC G"
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="SUPERVISOR A"]="00692 CC H"
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="SUPERVISOR B"]="00692 CC I"
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="HARD IRON"]="00692 CC K"
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="Foundry A"]="00692 CC L"
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="Annealing"]="00692 CC N"
+data_mod4.df$craftcode[data_mod4.df$User.Group.Name=="Finishing"]="00692 CC O"
+#--------------------
+
+# End 'Data pre-processing'
+#=================================================
+
+
+#=================================================
+# Begin 'Data processing'
+
+#--------------------
+# Declare empty dataframes
+#
+# Dataframe A
+stats_a.df=data.frame(year=NA,
+						month=NA,
+						dept=NA,
+						userGroup=NA,
+						craftCode=NA,
+						craftDescr=NA,
+						sku=NA,
+						skuNum=NA,
+						user=NA,
+						quant=NA,
+						itemCost=NA,
+						quantCost=NA)
+
+# Dataframe B
+stats_b.df=data.frame(year=NA,
+						month=NA,
+						dept=NA,
+						sku=NA,
+						avgDisp=NA,
+						avgDispCost=NA,
+						avgDispPerWeek=NA,
+						medDisp=NA,
+						medDispCost=NA,
+						medDispPerWeek=NA)
+
+# Dataframe C
+stats_c.df=data.frame(year=NA,
+						dept=NA,
+						sku=NA,
+						avgMonthMedDisp=NA,
+						perWeek=NA)
+
+# Dataframe B2
+stats_b2.df=data.frame(year=NA,
+						month=NA,
+						userGroup=NA,
+						craftCode=NA,
+						craftDescr=NA,
+						sku=NA,
+						skuNum=NA,
+						avgDisp=NA,
+						avgDispCost=NA,
+						avgDispPerWeek=NA,
+						medDisp=NA,
+						medDispCost=NA,
+						medDispPerWeek=NA)
+						
+# Dataframe C2
+stats_c2.df=data.frame(year=NA,
+						userGroup=NA,
+						sku=NA,
+						avgMonthMedDisp=NA,
+						perWeek=NA)
+#--------------------
+
+# Loop over each month, then each department, then each item
+#
+# Loop over each month
+for(year.loopvar in unique(data_mod4.df$Year)) {
+
+# Subset down dataframe for $Month
+data_mod4.sub0=data_mod4.df[data_mod4.df$Year==year.loopvar,]
+
+	# Loop over each month
+	for(month.loopvar in unique(data_mod4.df$Month)) {
+
+		# Subset down dataframe for $Month
+		data_mod4.sub1=data_mod4.sub0[data_mod4.sub0$Month==month.loopvar,]
+	
+		# Loop over each department
+		for(dept.loopvar in unique(data_mod4.sub1$group)) {
+	
+			# Subset down dataframe for $User.Group.Name
+			data_mod4.sub2=data_mod4.sub1[data_mod4.sub1$group==dept.loopvar,]
+	
+			# Loop over each item
+			for(item.loopvar in unique(data_mod4.sub2$SKU.Description)) {
+	
+				# Subset down dataframe for $SKU.Description
+				data_mod4.sub3=data_mod4.sub2[data_mod4.sub2$SKU.Description==item.loopvar,]
+	
+				# Loop over each user
+				for(user.loopvar in unique(data_mod4.sub3$user)) {
+				
+					# Subset down data for $user
+					data_mod4.sub4=data_mod4.sub3[data_mod4.sub3$user==user.loopvar,]
+	
+					#--------------------
+					# Fill in dataframe A temp
+					stats_a_temp.df=data.frame(year=year.loopvar,
+											month=month.loopvar,
+											dept=dept.loopvar,
+											userGroup=data_mod4.sub4$User.Group.Name[1],
+											craftCode=data_mod4.sub4$craftcode[1],
+											craftDescr=data_mod4.sub4$craftcodedescr[1],
+											sku=item.loopvar,
+											skuNum=data_mod4.sub4$SKU[1],
+											user=user.loopvar,
+											quant=nrow(data_mod4.sub4),
+											itemCost=data_mod4.sub4$Replacement.Cost.[1],
+											quantCost=data_mod4.sub4$Replacement.Cost.[1]*nrow(data_mod4.sub4))
+	
+					# Logical to check how to stack temps into main stats_a.df
+					if(is.na(stats_a.df$year[1])==FALSE) {
+	
+						# Rewrite stats_a.df
+						stats_a.df=rbind(stats_a.df,stats_a_temp.df)
+	
+					}	# End 'Logical to check how to stack temps into main stats_a.df'
+	
+					# Logical to check how to stack temps into main stats_a.df
+					if(is.na(stats_a.df$year[1])==TRUE) {
+	
+						# Rewrite stats_a.df
+						stats_a.df=stats_a_temp.df
+	
+					}	# End 'Logical to check how to stack temps into main stats_a.df'
+					#--------------------
+	
+				}	# End 'Loop over each user'
+	
+				#--------------------
+				# Fill in dataframe B temp
+				stats_b_temp.df=data.frame(year=year.loopvar,
+										month=month.loopvar,
+										dept=dept.loopvar,
+										sku=item.loopvar,
+										avgDisp=mean(stats_a.df$quant[stats_a.df$month==month.loopvar & stats_a.df$dept==dept.loopvar & stats_a.df$sku==item.loopvar]),
+										avgDispCost=stats_a.df$itemCost[stats_a.df$month==month.loopvar & stats_a.df$dept==dept.loopvar & stats_a.df$sku==item.loopvar][1]*mean(stats_a.df$quant[stats_a.df$month==month.loopvar & stats_a.df$dept==dept.loopvar & stats_a.df$sku==item.loopvar]),
+										avgDispPerWeek=mean(stats_a.df$quant[stats_a.df$month==month.loopvar & stats_a.df$dept==dept.loopvar & stats_a.df$sku==item.loopvar])/4,
+										medDisp=median(stats_a.df$quant[stats_a.df$month==month.loopvar & stats_a.df$dept==dept.loopvar & stats_a.df$sku==item.loopvar]),
+										medDispCost=stats_a.df$itemCost[stats_a.df$month==month.loopvar & stats_a.df$dept==dept.loopvar & stats_a.df$sku==item.loopvar][1]*median(stats_a.df$quant[stats_a.df$month==month.loopvar & stats_a.df$dept==dept.loopvar & stats_a.df$sku==item.loopvar]),
+										medDispPerWeek=median(stats_a.df$quant[stats_a.df$month==month.loopvar & stats_a.df$dept==dept.loopvar & stats_a.df$sku==item.loopvar])/4)
+	
+				# Logical to check how to stack temps into main stats_b.df
+				if(is.na(stats_b.df$year[1])==FALSE) {
+	
+					# Stack into stats_b.df
+					stats_b.df=rbind(stats_b.df,stats_b_temp.df)
+	
+				}	# End 'Logical to check how to stack temps into main stats_b.df'
+	
+				# Logical to check how to stack temps into main stats_b.df
+				if(is.na(stats_b.df$year[1])==TRUE) {
+	
+					# Rewrite stats_b.df
+					stats_b.df=stats_b_temp.df
+	
+				}	# End 'Logical to check how to stack temps into main stats_b.df'
+				#--------------------
+	
+			}	# End 'Loop over each item'
+	
+		}	# End 'Loop over each department'
+	
+	}	# End 'Loop over each month'
+	
+}	# End 'Loop over each year'
+
+
+#--------------------
+# Loop for stats_c.df
+#
+# Loop over each department
+for(year.loopvar in unique(stats_b.df$year)) {
+
+	# Loop over each department
+	for(dept.loopvar in unique(stats_b.df$dept)) {
+	
+		# Loop over each item
+		for(item.loopvar in unique(stats_b.df$sku[stats_b.df$dept==dept.loopvar])) {
+	
+				#--------------------
+				# Fill in dataframe C temp
+				stats_c_temp.df=data.frame(year=year.loopvar,
+										dept=dept.loopvar,
+										sku=item.loopvar,
+										avgMonthMedDisp=mean(stats_b.df$medDisp[stats_b.df$year==year.loopvar & stats_b.df$dept==dept.loopvar & stats_b.df$sku==item.loopvar]),
+										perWeek=mean(stats_b.df$medDisp[stats_b.df$year==year.loopvar & stats_b.df$dept==dept.loopvar & stats_b.df$sku==item.loopvar])/4)
+				
+				# Logical to check how to stack temps into main stats_c.df
+				if(is.na(stats_c.df$year[1])==FALSE) {
+				
+					# Stack into stats_b.df
+					stats_c.df=rbind(stats_c.df,stats_c_temp.df)
+				
+				}	# End 'Logical to check how to stack temps into main stats_c.df'
+				
+				# Logical to check how to stack temps into main stats_c.df
+				if(is.na(stats_c.df$year[1])==TRUE) {
+				
+					# Rewrite stats_c.df
+					stats_c.df=stats_c_temp.df
+				
+				}	# End 'Logical to check how to stack temps into main stats_c.df'
+				#--------------------
+	
+		}	# End 'Loop over each item'
+	
+	}	# End '# Loop over each department'
+	
+}	# End '# Loop over each year'
+#--------------------
+
+#--------------------
+# Loop for stats_b2.df
+#
+# Loop over each month
+for(year.loopvar in unique(stats_a.df$year)) {
+
+	# Loop over each month
+	for(month.loopvar in unique(stats_a.df$month)) {
+	
+		# Create stats_a.sub1
+		stats_a.sub1=stats_a.df[stats_a.df$month==month.loopvar,]
+	
+		# Loop over each userGroup
+		for(userGroup.loopvar in unique(stats_a.sub1$userGroup)) {
+	
+			# Create stats_a.sub2
+			stats_a.sub2=stats_a.sub1[stats_a.sub1$userGroup==userGroup.loopvar,]
+	
+			# Loop over each item
+			for(item.loopvar in unique(stats_a.sub2$sku)) {
+	
+				# Create stats_a.sub1
+				stats_a.sub3=stats_a.sub2[stats_a.sub2$sku==item.loopvar,]
+	
+				#--------------------
+				# Fill in dataframe B temp
+				stats_b2_temp.df=data.frame(year=year.loopvar,
+										month=month.loopvar,
+										userGroup=userGroup.loopvar,
+										craftCode=stats_a.sub3$craftCode[1],
+										craftDescr=stats_a.sub3$craftDescr[1],
+										sku=item.loopvar,
+										skuNum=stats_a.sub3$skuNum[1],
+										avgDisp=mean(stats_a.sub3$quant[stats_a.sub3$year==year.loopvar & stats_a.sub3$month==month.loopvar & stats_a.sub3$userGroup==userGroup.loopvar & stats_a.sub3$sku==item.loopvar]),
+										avgDispCost=stats_a.sub3$itemCost[stats_a.sub3$year==year.loopvar & stats_a.sub3$month==month.loopvar & stats_a.sub3$userGroup==userGroup.loopvar & stats_a.sub3$sku==item.loopvar][1]*mean(stats_a.sub3$quant[stats_a.sub3$month==month.loopvar & stats_a.sub3$userGroup==userGroup.loopvar & stats_a.sub3$sku==item.loopvar]),
+										avgDispPerWeek=mean(stats_a.sub3$quant[stats_a.sub3$year==year.loopvar & stats_a.sub3$month==month.loopvar & stats_a.sub3$userGroup==userGroup.loopvar & stats_a.sub3$sku==item.loopvar])/4,
+										medDisp=median(stats_a.sub3$quant[stats_a.sub3$year==year.loopvar & stats_a.sub3$month==month.loopvar & stats_a.sub3$userGroup==userGroup.loopvar & stats_a.sub3$sku==item.loopvar]),
+										medDispCost=stats_a.sub3$itemCost[stats_a.sub3$year==year.loopvar & stats_a.sub3$month==month.loopvar & stats_a.sub3$userGroup==userGroup.loopvar & stats_a.sub3$sku==item.loopvar][1]*median(stats_a.sub3$quant[stats_a.sub3$month==month.loopvar & stats_a.sub3$userGroup==userGroup.loopvar & stats_a.sub3$sku==item.loopvar]),
+										medDispPerWeek=median(stats_a.sub3$quant[stats_a.sub3$year==year.loopvar & stats_a.sub3$month==month.loopvar & stats_a.sub3$userGroup==userGroup.loopvar & stats_a.sub3$sku==item.loopvar])/4)
+		
+				# Logical to check how to stack temps into main stats_b.df
+				if(is.na(stats_b2.df$year[1])==FALSE) {
+		
+					# Stack into stats_b.df
+					stats_b2.df=rbind(stats_b2.df,stats_b2_temp.df)
+		
+				}	# End 'Logical to check how to stack temps into main stats_b.df'
+		
+				# Logical to check how to stack temps into main stats_b.df
+				if(is.na(stats_b2.df$year[1])==TRUE) {
+		
+					# Rewrite stats_b.df
+					stats_b2.df=stats_b2_temp.df
+		
+				}	# End 'Logical to check how to stack temps into main stats_b.df'
+				#--------------------
+						
+			}	# End 'Loop over each item'
+		
+		}	# End '# Loop over each userGroup'
+	
+	}	# End 'Loop over each month'
+	
+}	# End 'Loop over each year'
+#--------------------
+
+#--------------------
+# Loop for stats_c2.df
+#
+# Loop over each department
+for(year.loopvar in unique(stats_b2.df$year)) {
+
+	# Loop over each department
+	for(userGroup.loopvar in unique(stats_b2.df$userGroup)) {
+	
+		# Loop over each item
+		for(item.loopvar in unique(stats_b2.df$sku[stats_b2.df$userGroup==userGroup.loopvar])) {
+	
+				#--------------------
+				# Fill in dataframe C temp
+				stats_c2_temp.df=data.frame(year=year.loopvar,
+										userGroup=userGroup.loopvar,
+										sku=item.loopvar,
+										avgMonthMedDisp=mean(stats_b2.df$medDisp[stats_b2.df$year==year.loopvar & stats_b2.df$userGroup==userGroup.loopvar & stats_b2.df$sku==item.loopvar]),
+										perWeek=mean(stats_b2.df$medDisp[stats_b2.df$year==year.loopvar & stats_b2.df$userGroup==userGroup.loopvar & stats_b2.df$sku==item.loopvar])/4)
+				
+				# Logical to check how to stack temps into main stats_c.df
+				if(is.na(stats_c2.df$year[1])==FALSE) {
+				
+					# Stack into stats_b.df
+					stats_c2.df=rbind(stats_c2.df,stats_c2_temp.df)
+				
+				}	# End 'Logical to check how to stack temps into main stats_c.df'
+				
+				# Logical to check how to stack temps into main stats_c.df
+				if(is.na(stats_c2.df$year[1])==TRUE) {
+				
+					# Rewrite stats_c.df
+					stats_c2.df=stats_c2_temp.df
+				
+				}	# End 'Logical to check how to stack temps into main stats_c.df'
+				#--------------------
+	
+		}	# End 'Loop over each item'
+	
+	}	# End '# Loop over each department'
+	
+}	# End '# Loop over each year'
+#--------------------
+
+
+#	#--------------------
+#	# Declare empty dataframes
+#	#
+#	# Dataframe X
+#	stats_x.df=data.frame(day=NA,
+#							dept=NA,
+#							userGroup=NA,
+#							sku=NA,
+#							user=NA,
+#							quant=NA,
+#							itemCost=NA,
+#							quantCost=NA)
+#	
+#	invest_x.df=data_mod4.df
+#	invest_x.df$day=substr(invest_x.df$ï..Date,1,4)
+#	invest_x.df=invest_x.df[invest_x.df$day=="6/20" | invest_x.df$day=="6/21",]
+#	
+#	# Loop over each month, then each department, then each item
+#	#
+#	# Loop over each month
+#	for(day.loopvar in unique(invest_x.df$day)) {
+#	
+#		# Subset down dataframe for $Month
+#		invest_x.sub1=invest_x.df[invest_x.df$day==day.loopvar,]
+#	
+#		# Loop over each department
+#		for(dept.loopvar in unique(invest_x.sub1$group)) {
+#	
+#			# Subset down dataframe for $User.Group.Name
+#			invest_x.sub2=invest_x.sub1[invest_x.sub1$group==dept.loopvar,]
+#	
+#			# Loop over each item
+#			for(item.loopvar in unique(invest_x.sub2$SKU.Description)) {
+#	
+#				# Subset down dataframe for $SKU.Description
+#				invest_x.sub3=invest_x.sub2[invest_x.sub2$SKU.Description==item.loopvar,]
+#	
+#				# Loop over each user
+#				for(user.loopvar in unique(invest_x.sub3$user)) {
+#				
+#					# Subset down data for $user
+#					invest_x.sub4=invest_x.sub3[invest_x.sub3$user==user.loopvar,]
+#	
+#					#--------------------
+#					# Fill in dataframe A temp
+#					stats_x_temp.df=data.frame(day=invest_x.sub4$day[1],
+#											dept=dept.loopvar,
+#											userGroup=invest_x.sub4$User.Group.Name[1],
+#											sku=item.loopvar,
+#											user=user.loopvar,
+#											quant=nrow(invest_x.sub4),
+#											itemCost=invest_x.sub4$Replacement.Cost.[1],
+#											quantCost=invest_x.sub4$Replacement.Cost.[1]*nrow(invest_x.sub4))
+#	
+#					# Logical to check how to stack temps into main stats_a.df
+#					if(is.na(stats_x.df$day[1])==FALSE) {
+#	
+#						# Rewrite stats_a.df
+#						stats_x.df=rbind(stats_x.df,stats_x_temp.df)
+#	
+#					}	# End 'Logical to check how to stack temps into main stats_a.df'
+#	
+#					# Logical to check how to stack temps into main stats_a.df
+#					if(is.na(stats_x.df$day[1])==TRUE) {
+#	
+#						# Rewrite stats_a.df
+#						stats_x.df=stats_x_temp.df
+#	
+#					}	# End 'Logical to check how to stack temps into main stats_a.df'
+#					#--------------------
+#	
+#				}	# End 'Loop over each user'
+#	
+#	
+#			}	# End 'Loop over each item'
+#	
+#		}	# End 'Loop over each department'
+#	
+#	}	# End 'Loop over each day'
+#	
+#	# Write stats dataframes to files
+#	write.csv(stats_x.df,file=paste(route.strVar,"output/",script_name.var,"_statsX-table.csv",sep=""))
+#	#--------------------
+
+# Dataframe X
+stats_xx.df=data.frame(year=NA,
+						month=NA,
+						totalQuantCost=NA)
+
+for(year.loopvar in unique(stats_a.df$year)) {
+
+	for(month.loopvar in unique(stats_a.df$month[stats_a.df$year==year.loopvar])) {
+	
+		stats_a.sub1=stats_a.df[stats_a.df$year==year.loopvar & stats_a.df$month==month.loopvar,]
+		
+		stats_xx.temp=data.frame(year=year.loopvar,
+						month=month.loopvar,
+						totalQuantCost=sum(stats_a.sub1$quantCost[is.na(stats_a.sub1$quantCost)==FALSE]))
+
+						# Logical to check how to stack temps into main stats_a.df
+						if(is.na(stats_xx.df$year[1])==FALSE) {
+		
+							# Rewrite stats_a.df
+							stats_xx.df=rbind(stats_xx.df,stats_xx.temp)
+		
+						}	# End 'Logical to check how to stack temps into main stats_a.df'
+		
+						# Logical to check how to stack temps into main stats_a.df
+						if(is.na(stats_xx.df$year[1])==TRUE) {
+		
+							# Rewrite stats_a.df
+							stats_xx.df=stats_xx.temp
+		
+						}	# End 'Logical to check how to stack temps into main stats_a.df'
+
+	}
+
+}
+write.csv(stats_xx.df,file=paste(route.strVar,"output/",script_name.var,"_statsXX-table.csv",sep=""))
+
+
+#--------------------
+# Prepare item limit file for Grainger
+
+# Dataframe A
+stats_limit.df=data.frame(itemNum=NA,
+						itemDescr=NA,
+						craftCode=NA,
+						craftCodeDescr=NA,
+						itemLimit=NA,
+						itemLimitInterval=NA)
+						
+for(craftcode.loopvar in unique(stats_a.df$craftCode)) {
+
+	stats_a.subJul2023=stats_a.df[stats_a.df$craftCode==craftcode.loopvar & stats_a.df$year=="2023" & stats_a.df$month=="Jul",]
+	
+	stats_limit.temp=data.frame(itemDescr=unique(stats_a.subJul2023$sku),
+							itemNum=NA,
+							craftCode=craftcode.loopvar,
+							craftCodeDescr=stats_a.subJul2023$craftDescr[1],
+							itemLimit=NA,
+							itemLimitInterval=NA)
+
+	# Logical to check how to stack temps into main stats_c.df
+	if(is.na(stats_limit.df$itemDescr[1])==FALSE) {
+	
+		# Stack into stats_b.df
+		stats_limit.df=rbind(stats_limit.df,stats_limit.temp)
+	
+	}	# End 'Logical to check how to stack temps into main stats_c.df'
+	
+	# Logical to check how to stack temps into main stats_c.df
+	if(is.na(stats_limit.df$itemDescr[1])==TRUE) {
+	
+		# Rewrite stats_c.df
+		stats_limit.df=stats_limit.temp
+	
+	}	# End 'Logical to check how to stack temps into main stats_c.df'
+
+}
+
+for(craftcode.loopvar in unique(stats_limit.df$craftCode)) {
+
+	for(item.loopvar in unique(stats_limit.df$itemDescr[stats_limit.df$craftCode==craftcode.loopvar])) {
+	
+		stats_limit.df$itemNum[stats_limit.df$craftCode==craftcode.loopvar & stats_limit.df$itemDescr==item.loopvar]=stats_b2.df$skuNum[stats_b2.df$sku==item.loopvar][1]
+		
+		stats_limit.df$itemLimitInterval[stats_limit.df$craftCode==craftcode.loopvar & stats_limit.df$itemDescr==item.loopvar]=7
+		
+		stats_limit.df$itemLimit[stats_limit.df$craftCode==craftcode.loopvar & stats_limit.df$itemDescr==item.loopvar]=ceiling(mean(stats_b2.df$medDispPerWeek[stats_b2.df$craftCode==craftcode.loopvar & stats_b2.df$sku==item.loopvar
+			& is.na(stats_b2.df$medDispPerWeek)==FALSE]))
+	
+		if(item.loopvar=="Disposable Respirator, Universal, N95, PK10") {
+		
+			stats_limit.df$itemLimitInterval[stats_limit.df$craftCode==craftcode.loopvar & stats_limit.df$itemDescr==item.loopvar]=1
+		
+		}
+		
+		#if(stats_limit.df$itemLimit[stats_limit.df$craftCode==craftcode.loopvar & stats_limit.df$itemDescr==item.loopvar]<1) {
+		#
+		#	stats_limit.df$itemLimit[stats_limit.df$craftCode==craftcode.loopvar & stats_limit.df$itemDescr==item.loopvar]=1
+		#
+		#}
+	
+	}
+
+}
+
+write.csv(stats_limit.df,file=paste(route.strVar,"output/",script_name.var,"_statsLimit.csv",sep=""))
+
+#--------------------
+
+
+#--------------------
+# Write stats dataframes to files
+write.csv(stats_a.df,file=paste(route.strVar,"output/",script_name.var,"_statsA-table.csv",sep=""))
+write.csv(stats_b.df,file=paste(route.strVar,"output/",script_name.var,"_statsB-table.csv",sep=""))
+write.csv(stats_c.df,file=paste(route.strVar,"output/",script_name.var,"_statsC-table.csv",sep=""))
+write.csv(stats_b2.df,file=paste(route.strVar,"output/",script_name.var,"_statsB2-table.csv",sep=""))
+write.csv(stats_c2.df,file=paste(route.strVar,"output/",script_name.var,"_statsC2-table.csv",sep=""))
+#--------------------
+
+# End 'Data processing'
+#=================================================
+
+
+#=================================================
+# Begin 'Figure generation section'
+
+# Write figures to file
+#pdf(paste(route.strVar,"figures/",script_name.var,"_",dataDate.var,".pdf",sep=""),width=11,height=8.5)
+pdf(paste(route.strVar,"figures/",script_name.var,"_",dataDate.var,".pdf",sep=""),width=11,height=8.5)
+
+# Loop through variables
+#
+# Loop over each year
+for(year.loopvar in unique(stats_a.df$year)) {
+
+	# Sub df
+	stats_a.sub0=stats_a.df[stats_a.df$year==year.loopvar,]
+	
+	# Loop over each month
+	for(month.loopvar in unique(stats_a.sub0$month)) {
+
+		# Sub df
+		stats_a.sub1=stats_a.sub0[stats_a.sub0$month==month.loopvar,]
+
+		# Loop over each department
+		for(dept.loopvar in unique(stats_a.sub1$dept)) {
+	
+				#-------------------------------------------------
+				# Preprocess data
+				
+				# Set plot.df
+				plot.df=stats_a.sub1[stats_a.sub1$dept==dept.loopvar,]
+
+				if(nrow(plot.df)>0)
+				{
+					# Set xaxisLabel.vec
+					xaxisLabel.vec=boxplot(plot.df$quant~plot.df$sku,plot=FALSE)$names
+				}
+	
+				# Set layout
+				par(mar=c(19,4,4,2)+0.1)
+	
+				# End 'Preprocess data'
+				#-------------------------------------------------
+	
+				#-------------------------------------------------
+				# Graphical plotting section
+	
+				if(nrow(plot.df)>0)
+				{
+					# Print boxplot
+					boxplot(plot.df$quant~plot.df$sku,xlab=NA,ylab=NA,names=NA)
+				}
+				if(nrow(plot.df)==0)
+				{
+					# Generate plot
+					plot(1:1,type="n",xlab=NA,ylab=NA,yaxt="n",xaxt="n")
+					text(x=1,y=1,"No data")
+				}
+
+				# Add box to plot
+				box(lwd=2)
+	
+				# End 'Graphical plotting section'
+				#-------------------------------------------------
+	
+				#-------------------------------------------------
+				# Graphical axes section
+
+				if(nrow(plot.df)>0)
+				{
+					# Add xaxis labels
+					axis(side=1,at=1:length(xaxisLabel.vec),labels=xaxisLabel.vec,las=2)
+				}
+
+				# End 'Graphical axes section'
+				#-------------------------------------------------
+	
+				#-------------------------------------------------
+				# Legend annotations
+		
+				# End 'Legend annotations'
+				#-------------------------------------------------
+	
+				#-------------------------------------------------
+				# Titles, axis labels and other annotations
+		
+				# Add title to barplot by number
+				mtext(paste(dept.loopvar," dept., incl. supervisors, vending data for ",month.loopvar,", ",plot.df$year[1],sep=""),font=2,cex=1.3,side=3,line=2,adj=1)
+		
+				# Add y-axis label
+				yaxis.loc=par("usr")
+				text(yaxis.loc[1],yaxis.loc[4],"# disp.\nper user",pos=3,xpd=TRUE,offset=1,font=2)
+		
+				# End 'Titles, axis labels and other annotations'
+				#-------------------------------------------------
+	
+		} # End 'Loop over each department'
+	
+		# Loop over each user group
+		for(userGroup.loopvar in unique(stats_a.df$userGroup)) {
+	
+				#-------------------------------------------------
+				# Preprocess data
+				
+				# Set plot.df
+				plot.df=stats_a.sub1[stats_a.sub1$userGroup==userGroup.loopvar,]
+	
+				# Set xaxisLabel.vec
+				xaxisLabel.vec=boxplot(plot.df$quant~plot.df$sku,plot=FALSE)$names
+	
+				# Set layout
+				par(mar=c(19,4,4,2)+0.1)
+	
+				# End 'Preprocess data'
+				#-------------------------------------------------
+	
+				#-------------------------------------------------
+				# Graphical plotting section
+	
+				# Print boxplot
+				boxplot(plot.df$quant~plot.df$sku,xlab=NA,ylab=NA,names=NA)
+	
+				# Add box to plot
+				box(lwd=2)
+	
+				# End 'Graphical plotting section'
+				#-------------------------------------------------
+	
+				#-------------------------------------------------
+				# Graphical axes section
+	
+				# Add xaxis labels
+				axis(side=1,at=1:length(xaxisLabel.vec),labels=xaxisLabel.vec,las=2)
+	
+				# End 'Graphical axes section'
+				#-------------------------------------------------
+	
+				#-------------------------------------------------
+				# Legend annotations
+		
+				# End 'Legend annotations'
+				#-------------------------------------------------
+	
+				#-------------------------------------------------
+				# Titles, axis labels and other annotations
+		
+				# Add title to barplot by number
+				mtext(paste(userGroup.loopvar," user class vending data for ",month.loopvar,", ",plot.df$year[1],sep=""),font=2,cex=1.3,side=3,line=2,adj=1)
+		
+				# Add y-axis label
+				yaxis.loc=par("usr")
+				text(yaxis.loc[1],yaxis.loc[4],"# disp.\nper user",pos=3,xpd=TRUE,offset=1,font=2)
+		
+				# End 'Titles, axis labels and other annotations'
+				#-------------------------------------------------
+	
+		} # End 'Loop over each user group'
+	
+	}	# End 'Loop over each month'
+	
+}	# End 'Loop over each year'
+
+# Loop over each department
+for(dept.loopvar in unique(stats_a.df$dept)) {
+
+		#-------------------------------------------------
+		# Preprocess data
+		
+		# Set plot.df
+		plot.df=stats_a.df[stats_a.df$dept==dept.loopvar,]
+
+		# Set $years vector
+		plot.df$years=plot.df$year
+
+		# Logic for setting $years
+		if(length(unique(plot.df$year))>1) {
+
+			plot.df$years=paste(unique(plot.df$year),collapse=" & ")
+
+		} # End 'Logic for setting $years'
+
+		# Set xaxisLabel.vec
+		xaxisLabel.vec=boxplot(plot.df$quant~plot.df$sku,plot=FALSE)$names
+
+		# Set layout
+		par(mar=c(19,4,4,2)+0.1)
+
+		# End 'Preprocess data'
+		#-------------------------------------------------
+
+		#-------------------------------------------------
+		# Graphical plotting section
+
+		# Print boxplot
+		boxplot(plot.df$quant~plot.df$sku,xlab=NA,ylab=NA,names=NA)
+
+		# Add box to plot
+		box(lwd=2)
+
+		# End 'Graphical plotting section'
+		#-------------------------------------------------
+
+		#-------------------------------------------------
+		# Graphical axes section
+
+		# Add xaxis labels
+		axis(side=1,at=1:length(xaxisLabel.vec),labels=xaxisLabel.vec,las=2)
+
+		# End 'Graphical axes section'
+		#-------------------------------------------------
+
+		#-------------------------------------------------
+		# Legend annotations
+
+		# End 'Legend annotations'
+		#-------------------------------------------------
+
+		#-------------------------------------------------
+		# Titles, axis labels and other annotations
+
+		# Add title to barplot by number
+		mtext(paste("All ",dept.loopvar," dept., incl. supervisors, vending data for ",plot.df$years[1],sep=""),font=2,cex=1.3,side=3,line=2,adj=1)
+
+		# Add y-axis label
+		yaxis.loc=par("usr")
+		text(yaxis.loc[1],yaxis.loc[4],"# disp.\nper user",pos=3,xpd=TRUE,offset=1,font=2)
+
+		# End 'Titles, axis labels and other annotations'
+		#-------------------------------------------------
+
+} # End 'Loop over each department'
+
+# Loop over each user group
+for(userGroup.loopvar in unique(stats_a.df$userGroup)) {
+
+		#-------------------------------------------------
+		# Preprocess data
+		
+		# Set plot.df
+		plot.df=stats_a.df[stats_a.df$userGroup==userGroup.loopvar,]
+
+		# Set $years vector
+		plot.df$years=plot.df$year
+
+		# Logic for setting $years
+		if(length(unique(plot.df$year))>1) {
+
+			plot.df$years=paste(unique(plot.df$year),collapse=" & ")
+
+		} # End 'Logic for setting $years'
+
+		# Set xaxisLabel.vec
+		xaxisLabel.vec=boxplot(plot.df$quant~plot.df$sku,plot=FALSE)$names
+
+		# Set layout
+		par(mar=c(19,4,4,2)+0.1)
+
+		# End 'Preprocess data'
+		#-------------------------------------------------
+
+		#-------------------------------------------------
+		# Graphical plotting section
+
+		# Print boxplot
+		boxplot(plot.df$quant~plot.df$sku,xlab=NA,ylab=NA,names=NA)
+
+		# Add box to plot
+		box(lwd=2)
+
+		# End 'Graphical plotting section'
+		#-------------------------------------------------
+
+		#-------------------------------------------------
+		# Graphical axes section
+
+		# Add xaxis labels
+		axis(side=1,at=1:length(xaxisLabel.vec),labels=xaxisLabel.vec,las=2)
+
+		# End 'Graphical axes section'
+		#-------------------------------------------------
+
+		#-------------------------------------------------
+		# Legend annotations
+
+		# End 'Legend annotations'
+		#-------------------------------------------------
+
+		#-------------------------------------------------
+		# Titles, axis labels and other annotations
+
+		# Add title to barplot by number
+		mtext(paste("All ",userGroup.loopvar," user class vending data for ",plot.df$years[1],sep=""),font=2,cex=1.3,side=3,line=2,adj=1)
+
+		# Add y-axis label
+		yaxis.loc=par("usr")
+		text(yaxis.loc[1],yaxis.loc[4],"# disp.\nper user",pos=3,xpd=TRUE,offset=1,font=2)
+
+		# End 'Titles, axis labels and other annotations'
+		#-------------------------------------------------
+
+} # End 'Loop over each user group'
+
+# End 'Write figures to file'
+dev.off()
+
+# End 'Figure generation section'
+#=================================================
+
+
+#	silica_sub1.df=silica_raw.df[silica_raw.df$toxicant=="Respirable crystalline silica",]
+#	#--------------------
+#	testSubUser.df=test.df[test.df$User.Group.Name=="Annealing",]
+#	
+#	testSubUser_sku.df=testSubUser.df[testSubUser.df$SKU.Description=="Disposable Respirator, M/L, P100, Molded",]
+#	
+#	avgDenom.var=length(unique(testSubUser.df$Last.Name))
+#	
+#	avgNumer.var=0
+#	
+#	avgIssPerDeptDec2022.var=0
+#	
+#	for(loopUser.var in unique(testSubUser.df$Last.Name)) {
+#		
+#		loopSub.df=testSubUser_sku.df[testSubUser_sku.df$Last.Name==loopUser.var,]
+#		
+#		avgNumer.var=avgNumer.var+nrow(loopSub.df)
+#	
+#	}
+#	
+#	avgIssPerDeptDec2022.var=avgNumer.var/avgDenom.var
+#	
+#	avgIssPerDeptDec2022.var
